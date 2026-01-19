@@ -12,6 +12,14 @@ interface AnswerSectionProps {
   isLoading: boolean
 }
 
+// Memoized Markdown component to prevent unnecessary re-renders
+const MemoizedReactMarkdown = React.memo(
+  ReactMarkdown,
+  (prevProps: any, nextProps: any) =>
+    prevProps.children === nextProps.children &&
+    prevProps.className === nextProps.className
+)
+
 export function AnswerSection({ content, isLoading }: AnswerSectionProps) {
   const [displayedContent, setDisplayedContent] = React.useState("")
   const [isDoneTyping, setIsDoneTyping] = React.useState(false)
@@ -24,34 +32,27 @@ export function AnswerSection({ content, isLoading }: AnswerSectionProps) {
       return
     }
 
+    let mounted = true
     let i = 0
     const interval = setInterval(() => {
       if (i < content.length) {
-        setDisplayedContent((prev) => prev + content.charAt(i))
+        if (mounted) {
+          setDisplayedContent(content.slice(0, i + 1))
+        }
         i++
       } else {
         clearInterval(interval)
-        setIsDoneTyping(true)
+        if (mounted) {
+          setIsDoneTyping(true)
+        }
       }
-    }, 10) // Speed of typing
+    }, 5) // Faster typing (5ms) to feel more responsive
 
-    return () => clearInterval(interval)
+    return () => {
+      mounted = false
+      clearInterval(interval)
+    }
   }, [content, isLoading])
-
-  // Update logic to handle if content updates while streaming (real streaming behavior usually appends)
-  // For this mock, we just assume `content` is the full final string and we type it out.
-  // Ideally, if `content` grows, we just type the new parts.
-  // Simplified for this task:
-  
-  React.useEffect(() => {
-     if(!isLoading && content) {
-         // Optimization: if content is very large, just show it all to avoid slow typing
-         if(content.length > 0) {
-             // Reset logic handled above, but if we wanted real streaming we'd diff.
-         }
-     }
-  }, [content, isLoading])
-
 
   return (
     <div className="prose prose-zinc dark:prose-invert max-w-none w-full">
@@ -62,12 +63,12 @@ export function AnswerSection({ content, isLoading }: AnswerSectionProps) {
           <Skeleton className="h-4 w-[80%]" />
         </div>
       ) : (
-        <ReactMarkdown
+        <MemoizedReactMarkdown
           components={{
             code({ node, inline, className, children, ...props }: any) {
               const match = /language-(\w+)/.exec(className || "")
               return !inline && match ? (
-                <CodeBlock language={match[1]} value={String(children).replace(/\n$/, "")} />
+                <CodeBlock language={match[1]} value={String(children).replace(/\n$/, "")} /> 
               ) : (
                 <code className={className} {...props}>
                   {children}
@@ -77,7 +78,7 @@ export function AnswerSection({ content, isLoading }: AnswerSectionProps) {
           }}
         >
           {displayedContent}
-        </ReactMarkdown>
+        </MemoizedReactMarkdown>
       )}
     </div>
   )
@@ -100,18 +101,18 @@ const CodeBlock = React.memo(function CodeBlock({ language, value }: { language:
   const [html, setHtml] = React.useState<string>("")
   const [copied, setCopied] = React.useState(false)
 
+  // Explicitly track if we are mounted to avoid state updates on unmount
   React.useEffect(() => {
     let mounted = true
     async function highlight() {
       try {
         const highlighter = await getHighlighter()
         
-        // Load language if not pre-loaded (rare but possible)
+        // Load language if not pre-loaded
         if (!highlighter.getLoadedLanguages().includes(language)) {
              try {
                 await highlighter.loadLanguage(language)
              } catch (e) {
-                // If language fails to load (e.g. transient 't' or 'ts'), fallback to plain text (return)
                 return
              }
         }
@@ -125,7 +126,7 @@ const CodeBlock = React.memo(function CodeBlock({ language, value }: { language:
             setHtml(generatedHtml)
         }
       } catch (e) {
-         // Silently fail to plain text
+         // Silently fail
       }
     }
     highlight()
@@ -138,28 +139,9 @@ const CodeBlock = React.memo(function CodeBlock({ language, value }: { language:
     setTimeout(() => setCopied(false), 2000)
   }
 
-  // If HTML is not ready yet, render the PREVIOUS html if available (to stop flickering) 
-  // OR render a consistent placeholder. 
-  // Since we are streaming, 'value' changes often. 
-  
-  if (!html) {
-    return (
-        <div className="relative my-4 rounded-lg border bg-zinc-950 p-4 font-mono text-sm text-zinc-50">
-             <div className="absolute right-4 top-4">
-                <Button variant="ghost" size="icon" disabled>
-                    <Copy className="h-4 w-4 text-zinc-500" />
-                </Button>
-            </div>
-             <pre className="overflow-x-auto py-4">
-                <code>{value}</code>
-            </pre>
-        </div>
-    )
-  }
-
-  return (
-    <div className="relative my-4 rounded-lg border bg-zinc-950">
-      <div className="flex items-center justify-between px-4 py-2 border-b border-zinc-800 bg-zinc-900/50 rounded-t-lg">
+  // Common Header to prevent layout shift
+  const Header = (
+    <div className="flex items-center justify-between px-4 py-2 border-b border-zinc-800 bg-zinc-900/50 rounded-t-lg">
         <span className="text-xs text-zinc-400">{language}</span>
         <Button
           variant="ghost"
@@ -170,6 +152,22 @@ const CodeBlock = React.memo(function CodeBlock({ language, value }: { language:
           {copied ? <Check className="h-3 w-3" /> : <Copy className="h-3 w-3" />}
         </Button>
       </div>
+  )
+
+  if (!html) {
+    return (
+        <div className="relative my-4 rounded-lg border bg-zinc-950">
+             {Header}
+             <pre className="overflow-x-auto p-4 text-sm font-mono text-zinc-50">
+                <code>{value}</code>
+            </pre>
+        </div>
+    )
+  }
+
+  return (
+    <div className="relative my-4 rounded-lg border bg-zinc-950">
+      {Header}
       <div
         className="overflow-x-auto p-4 text-sm [&>pre]:!bg-transparent [&>pre]:!p-0"
         dangerouslySetInnerHTML={{ __html: html }}
