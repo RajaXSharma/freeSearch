@@ -1,0 +1,29 @@
+generator client {
+    provider = "prisma-client-js"
+    output   = "../src/generated/prisma"
+}
+
+datasource db {
+    provider = "sqlite"
+}
+
+model Chat {
+    id        String    @id @default(cuid())
+    title     String    @default("New Chat")
+    createdAt DateTime  @default(now())
+    updatedAt DateTime  @updatedAt
+    messages  Message[]
+}
+
+model Message {
+    id        String   @id @default(cuid())
+    chatId    String
+    role      String // "user" | "assistant"
+    content   String
+    sources   String? // JSON string of search sources
+    createdAt DateTime @default(now())
+
+    chat Chat @relation(fields: [chatId], references: [id], onDelete: Cascade)
+
+    @@index([chatId])
+}

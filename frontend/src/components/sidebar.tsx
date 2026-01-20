@@ -1,20 +1,76 @@
 "use client"
 
 import * as React from "react"
-import { Plus, History, Settings, Menu, MessageSquare } from "lucide-react"
+import Link from "next/link"
+import { useRouter } from "next/navigation"
+import { Plus, Settings, Menu, MessageSquare, Trash2 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { Sheet, SheetContent, SheetTrigger, SheetTitle } from "@/components/ui/sheet"
 import { ThemeToggle } from "@/components/theme-toggle"
 import { cn } from "@/lib/utils"
-
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
 import { PanelLeft, PanelLeftClose } from "lucide-react"
 
-interface SidebarProps extends React.HTMLAttributes<HTMLDivElement> {}
+interface Chat {
+  id: string
+  title: string
+  updatedAt: string
+}
+
+type SidebarProps = React.HTMLAttributes<HTMLDivElement>
 
 export function Sidebar({ className }: SidebarProps) {
   const [isCollapsed, setIsCollapsed] = React.useState(false)
+  const [chats, setChats] = React.useState<Chat[]>([])
+  const router = useRouter()
+
+  // Fetch chat history
+  React.useEffect(() => {
+    async function fetchChats() {
+      try {
+        const response = await fetch("/api/chats")
+        if (response.ok) {
+          const data = await response.json()
+          setChats(data)
+        }
+      } catch (error) {
+        console.error("Failed to fetch chats:", error)
+      }
+    }
+
+    fetchChats()
+    
+    // Refetch on route changes
+    const interval = setInterval(fetchChats, 5000)
+    return () => clearInterval(interval)
+  }, [])
+
+  const handleNewChat = async () => {
+    try {
+      const response = await fetch("/api/chats", { method: "POST" })
+      if (response.ok) {
+        const chat = await response.json()
+        router.push(`/chat/${chat.id}`)
+      }
+    } catch (error) {
+      console.error("Failed to create chat:", error)
+    }
+  }
+
+  const handleDeleteChat = async (chatId: string, e: React.MouseEvent) => {
+    e.preventDefault()
+    e.stopPropagation()
+    
+    try {
+      const response = await fetch(`/api/chats/${chatId}`, { method: "DELETE" })
+      if (response.ok) {
+        setChats((prev) => prev.filter((c) => c.id !== chatId))
+      }
+    } catch (error) {
+      console.error("Failed to delete chat:", error)
+    }
+  }
 
   return (
     <TooltipProvider delayDuration={0}>
@@ -27,7 +83,11 @@ export function Sidebar({ className }: SidebarProps) {
         </SheetTrigger>
         <SheetContent side="left" className="w-[260px] p-0">
           <SheetTitle className="sr-only">Navigation Menu</SheetTitle>
-          <SidebarContent />
+          <SidebarContent 
+            chats={chats} 
+            onNewChat={handleNewChat}
+            onDelete={handleDeleteChat}
+          />
         </SheetContent>
       </Sheet>
 
@@ -43,9 +103,9 @@ export function Sidebar({ className }: SidebarProps) {
            {/* Header & Toggle */}
            <div className={cn("flex h-14 items-center", isCollapsed ? "justify-center" : "justify-between px-4")}>
              {!isCollapsed && (
-                <div className="font-semibold text-lg flex items-center animate-in fade-in duration-300">
+                <Link href="/" className="font-semibold text-lg flex items-center animate-in fade-in duration-300">
                     <span className="text-primary mr-2">✦</span> FreeSearch
-                </div>
+                </Link>
              )}
              <Button 
                 variant="ghost" 
@@ -62,14 +122,23 @@ export function Sidebar({ className }: SidebarProps) {
              {isCollapsed ? (
                 <Tooltip>
                     <TooltipTrigger asChild>
-                        <Button variant="outline" size="icon" className="h-10 w-10 rounded-full shadow-sm hover:shadow-md">
+                        <Button 
+                          variant="outline" 
+                          size="icon" 
+                          className="h-10 w-10 rounded-full shadow-sm hover:shadow-md"
+                          onClick={handleNewChat}
+                        >
                             <Plus className="h-4 w-4" />
                         </Button>
                     </TooltipTrigger>
                     <TooltipContent side="right">New Thread</TooltipContent>
                 </Tooltip>
              ) : (
-                <Button variant="outline" className="w-full justify-start gap-2 rounded-full py-6 shadow-sm hover:shadow-md transition-all">
+                <Button 
+                  variant="outline" 
+                  className="w-full justify-start gap-2 rounded-full py-6 shadow-sm hover:shadow-md transition-all"
+                  onClick={handleNewChat}
+                >
                   <Plus className="h-4 w-4" />
                   <span>New Thread</span>
                   <span className="ml-auto text-xs text-muted-foreground border px-1.5 py-0.5 rounded">Ctrl I</span>
@@ -86,23 +155,27 @@ export function Sidebar({ className }: SidebarProps) {
                
                <ScrollArea className="h-full">
                   <div className="flex flex-col gap-1 px-2">
-                      {[
-                        "How to use CSS Grid",
-                        "History of the Roman Empire",
-                        "Best Pasta Recipes 2024",
-                        "React vs Vue performance",
-                        "Quantum Physics for dummies",
-                        "Next.js 15 features",
-                      ].map((topic, i) => (
-                          <Button
-                              key={i}
+                      {chats.length === 0 ? (
+                        <p className="text-sm text-muted-foreground px-2 py-4">
+                          No conversations yet
+                        </p>
+                      ) : (
+                        chats.map((chat) => (
+                          <Link key={chat.id} href={`/chat/${chat.id}`}>
+                            <Button
                               variant="ghost"
-                              className="justify-start gap-2 truncate text-sm font-normal h-9"
-                          >
-                              <MessageSquare className="h-3 w-3 text-muted-foreground" />
-                              <span className="truncate">{topic}</span>
-                          </Button>
-                      ))}
+                              className="w-full justify-start gap-2 truncate text-sm font-normal h-9 group"
+                            >
+                              <MessageSquare className="h-3 w-3 text-muted-foreground flex-shrink-0" />
+                              <span className="truncate flex-1 text-left">{chat.title}</span>
+                              <Trash2 
+                                className="h-3 w-3 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0"
+                                onClick={(e) => handleDeleteChat(chat.id, e)}
+                              />
+                            </Button>
+                          </Link>
+                        ))
+                      )}
                   </div>
                </ScrollArea>
              </div>
@@ -146,17 +219,29 @@ export function Sidebar({ className }: SidebarProps) {
   )
 }
 
-function SidebarContent() {
+interface SidebarContentProps {
+  chats: Chat[]
+  onNewChat: () => void
+  onDelete: (chatId: string, e: React.MouseEvent) => void
+}
+
+function SidebarContent({ chats, onNewChat, onDelete }: SidebarContentProps) {
   return (
     <div className="flex h-full flex-col">
       {/* Header */}
       <div className="flex h-14 items-center px-4 font-semibold text-lg">
-        <span className="text-primary mr-2">✦</span> FreeSearch
+        <Link href="/" className="flex items-center">
+          <span className="text-primary mr-2">✦</span> FreeSearch
+        </Link>
       </div>
 
       {/* New Chat */}
       <div className="p-4">
-        <Button variant="outline" className="w-full justify-start gap-2 rounded-full py-6 shadow-sm hover:shadow-md transition-all">
+        <Button 
+          variant="outline" 
+          className="w-full justify-start gap-2 rounded-full py-6 shadow-sm hover:shadow-md transition-all"
+          onClick={onNewChat}
+        >
           <Plus className="h-4 w-4" />
           <span>New Thread</span>
           <span className="ml-auto text-xs text-muted-foreground border px-1.5 py-0.5 rounded">Ctrl I</span>
@@ -170,23 +255,27 @@ function SidebarContent() {
         </div>
         <ScrollArea className="h-full">
           <div className="flex flex-col gap-1 px-2">
-            {[
-              "How to use CSS Grid",
-              "History of the Roman Empire",
-              "Best Pasta Recipes 2024",
-              "React vs Vue performance",
-              "Quantum Physics for dummies",
-              "Next.js 15 features",
-            ].map((topic, i) => (
-              <Button
-                key={i}
-                variant="ghost"
-                className="justify-start gap-2 truncate text-sm font-normal h-9"
-              >
-                <MessageSquare className="h-3 w-3 text-muted-foreground" />
-                <span className="truncate">{topic}</span>
-              </Button>
-            ))}
+            {chats.length === 0 ? (
+              <p className="text-sm text-muted-foreground px-2 py-4">
+                No conversations yet
+              </p>
+            ) : (
+              chats.map((chat) => (
+                <Link key={chat.id} href={`/chat/${chat.id}`}>
+                  <Button
+                    variant="ghost"
+                    className="w-full justify-start gap-2 truncate text-sm font-normal h-9 group"
+                  >
+                    <MessageSquare className="h-3 w-3 text-muted-foreground flex-shrink-0" />
+                    <span className="truncate flex-1 text-left">{chat.title}</span>
+                    <Trash2 
+                      className="h-3 w-3 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0"
+                      onClick={(e) => onDelete(chat.id, e)}
+                    />
+                  </Button>
+                </Link>
+              ))
+            )}
           </div>
         </ScrollArea>
       </div>
