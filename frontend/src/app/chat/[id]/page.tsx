@@ -2,6 +2,8 @@
 
 import * as React from "react"
 import { useParams, useRouter } from "next/navigation"
+import { useChat, type UIMessage } from "@ai-sdk/react"
+import { DefaultChatTransport } from "ai"
 import { Sidebar } from "@/components/sidebar"
 import { SearchInput } from "@/components/search-input"
 import { SourceCard, type Source } from "@/components/source-card"
@@ -9,32 +11,49 @@ import { AnswerSection } from "@/components/answer-section"
 import { Button } from "@/components/ui/button"
 import { ArrowLeft, Loader2 } from "lucide-react"
 
-interface Message {
-  id: string
-  role: "user" | "assistant"
-  content: string
-  sources?: Source[]
-}
-
 export default function ChatPage() {
   const params = useParams()
   const router = useRouter()
   const chatId = params.id as string
 
-  const [messages, setMessages] = React.useState<Message[]>([])
   const [currentSources, setCurrentSources] = React.useState<Source[]>([])
   const [isInitialLoad, setIsInitialLoad] = React.useState(true)
-  const [isLoading, setIsLoading] = React.useState(false)
+  const [hasLoadedHistory, setHasLoadedHistory] = React.useState(false)
   const [hasSubmittedInitialQuery, setHasSubmittedInitialQuery] = React.useState(false)
   const [input, setInput] = React.useState("")
+  const [historyMessageIds, setHistoryMessageIds] = React.useState<Set<string>>(new Set())
   const messagesEndRef = React.useRef<HTMLDivElement>(null)
+
+ 
+  const {
+    messages,
+    status,
+    error,
+    sendMessage,
+    setMessages,
+  } = useChat({
+    id: chatId,
+    transport: new DefaultChatTransport({
+      api: "/api/chat",
+      body: { chatId },
+    }),
+    // Handle custom data parts (sources) from the stream
+    onData: (dataPart) => {
+      if (dataPart.type === 'data-sources' && Array.isArray(dataPart.data)) {
+        setCurrentSources(dataPart.data as Source[])
+      }
+    },
+  })
+
+  // Derive loading state from status
+  const isLoading = status === 'submitted' || status === 'streaming'
 
   // Auto-scroll to bottom when new messages arrive
   React.useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" })
   }, [messages])
 
-  // Load existing chat messages on mount and handle initial query from URL
+  // Load existing chat messages on mount
   React.useEffect(() => {
     const loadChatHistory = async () => {
       try {
@@ -42,147 +61,83 @@ export default function ChatPage() {
         if (response.ok) {
           const data = await response.json()
           if (data.messages && data.messages.length > 0) {
-            setMessages(data.messages)
+            // Convert DB messages to AI SDK UIMessage format
+            const formattedMessages: UIMessage[] = data.messages.map((msg: { id: string; role: string; content: string }) => ({
+              id: msg.id,
+              role: msg.role as "user" | "assistant",
+              content: msg.content,
+              parts: [{ type: 'text' as const, text: msg.content }],
+            }))
+            // Track which messages came from history (skip animation for these)
+            setHistoryMessageIds(new Set(formattedMessages.map(m => m.id)))
+            setMessages(formattedMessages)
           }
+        } else if (response.status === 404) {
+          // Chat not found - redirect to home
+          console.warn("Chat not found, redirecting to home")
+          router.push("/")
+          return
         }
       } catch (err) {
         console.error("Failed to load chat history:", err)
       } finally {
         setIsInitialLoad(false)
-      }
-    }
-
-    const handleInitialQuery = () => {
-      // Check if there's a query parameter from the homepage
-      const urlParams = new URLSearchParams(window.location.search)
-      const initialQuery = urlParams.get('q')
-      
-      if (initialQuery && !hasSubmittedInitialQuery && messages.length === 0) {
-        setHasSubmittedInitialQuery(true)
-        handleSearchInput(initialQuery)
+        setHasLoadedHistory(true)
       }
     }
 
     if (chatId) {
-      loadChatHistory().then(() => {
-        handleInitialQuery()
-      })
+      loadChatHistory()
     }
-  }, [chatId]) // Only run on mount
+  }, [chatId, setMessages, router])
 
-  const sendMessage = async (content: string) => {
-    if (!content.trim() || isLoading) return
+  // Handle initial query from URL after history is loaded
+  React.useEffect(() => {
+    if (!hasLoadedHistory || hasSubmittedInitialQuery) return
 
-    const userMessage: Message = {
-      id: Date.now().toString(),
-      role: "user",
-      content,
+    const urlParams = new URLSearchParams(window.location.search)
+    const initialQuery = urlParams.get('q')
+    
+    if (initialQuery && messages.length === 0) {
+      setHasSubmittedInitialQuery(true)
+      // Clear sources before new query
+      setCurrentSources([])
+      sendMessage({ text: initialQuery })
     }
+  }, [hasLoadedHistory, hasSubmittedInitialQuery, messages.length, sendMessage])
 
-    setMessages((prev) => [...prev, userMessage])
-    setIsLoading(true)
-    setCurrentSources([])
-
-    try {
-      const response = await fetch("/api/chat", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          messages: [...messages, userMessage],
-          chatId,
-        }),
-      })
-
-      if (!response.ok) {
-        throw new Error("Failed to get response")
-      }
-
-      // Extract sources from headers
-      const sourcesHeader = response.headers.get("X-Sources")
-      if (sourcesHeader) {
-        try {
-          const decodedSources = JSON.parse(decodeURIComponent(sourcesHeader))
-          const formattedSources: Source[] = decodedSources.map((s: any, idx: number) => ({
-            title: s.title || s.url,
-            url: s.url,
-            snippet: s.snippet,
-            index: idx + 1,
-          }))
-          setCurrentSources(formattedSources)
-        } catch (e) {
-          console.error("Failed to parse sources:", e)
-        }
-      }
-
-      // Stream the response
-      const reader = response.body?.getReader()
-      const decoder = new TextDecoder()
-
-      const assistantMessage: Message = {
-        id: (Date.now() + 1).toString(),
-        role: "assistant",
-        content: "",
-      }
-
-      setMessages((prev) => [...prev, assistantMessage])
-
-      if (reader) {
-        let done = false
-        while (!done) {
-          const { value, done: readerDone } = await reader.read()
-          done = readerDone
-
-          if (value) {
-            const chunk = decoder.decode(value, { stream: true })
-            const lines = chunk.split("\n")
-
-            for (const line of lines) {
-              if (line.startsWith("0:")) {
-                try {
-                  const jsonStr = line.slice(2).trim()
-                  if (jsonStr) {
-                    const parsed = JSON.parse(jsonStr)
-                    if (parsed.text) {
-                      setMessages((prev) => {
-                        const newMessages = [...prev]
-                        const lastMessage = newMessages[newMessages.length - 1]
-                        if (lastMessage && lastMessage.role === "assistant") {
-                          lastMessage.content += parsed.text
-                        }
-                        return newMessages
-                      })
-                    }
-                  }
-                } catch (e) {
-                  // Ignore parse errors for partial chunks
-                }
-              }
-            }
-          }
-        }
-      }
-    } catch (error) {
-      console.error("Failed to send message:", error)
-    } finally {
-      setIsLoading(false)
-    }
-  }
-
+  // Handle form submission
   const handleFormSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault()
-    if (input.trim()) {
-      await sendMessage(input)
+    if (input.trim() && !isLoading) {
+      setCurrentSources([]) // Clear sources for new query
+      sendMessage({ text: input })
       setInput("")
     }
   }
 
+  // Handle search from SearchInput component
   const handleSearchInput = async (query: string) => {
-    if (!query.trim()) return
-    await sendMessage(query)
+    if (!query.trim() || isLoading) return
+    setCurrentSources([]) // Clear sources for new query
+    sendMessage({ text: query })
+    setInput("") // Clear the input after sending
+  }
+
+  // Helper to extract text content from message
+  const getMessageContent = (message: UIMessage): string => {
+    // AI SDK UIMessage uses parts array format
+    if (message.parts && message.parts.length > 0) {
+      return message.parts
+        .filter((part): part is { type: 'text'; text: string } => part.type === 'text')
+        .map(part => part.text)
+        .join('')
+    }
+    return ''
   }
 
   const userMessages = messages.filter((m) => m.role === "user")
-  const currentQuery = userMessages[userMessages.length - 1]?.content || ""
+  const currentQuery = userMessages.length > 0 ? getMessageContent(userMessages[userMessages.length - 1]) : ""
 
   return (
     <div className="flex h-screen w-full overflow-hidden bg-background text-foreground font-sans">
@@ -240,12 +195,12 @@ export default function ChatPage() {
                   {message.role === "user" ? (
                     <div className="mb-6">
                       <h2 className="text-2xl md:text-3xl font-serif border-b pb-4">
-                        {message.content}
+                        {getMessageContent(message)}
                       </h2>
                     </div>
                   ) : (
                     <div className="space-y-6">
-                      {/* Sources (only show for the most recent response or if sources exist) */}
+                      {/* Sources (only show for the most recent response) */}
                       {idx === messages.length - 1 && currentSources.length > 0 && (
                         <section>
                           <h3 className="text-sm font-semibold mb-3 flex items-center gap-2">
@@ -265,8 +220,9 @@ export default function ChatPage() {
                           <span className="text-lg">✤</span> Answer
                         </h3>
                         <AnswerSection
-                          content={message.content}
+                          content={getMessageContent(message)}
                           isLoading={isLoading && idx === messages.length - 1}
+                          skipAnimation={historyMessageIds.has(message.id)}
                         />
                       </section>
                     </div>
@@ -284,6 +240,13 @@ export default function ChatPage() {
                   </h3>
                   <AnswerSection content="" isLoading={true} />
                 </section>
+              </div>
+            )}
+
+            {/* Error display */}
+            {error && (
+              <div className="text-red-500 text-center p-4 bg-red-50 dark:bg-red-900/20 rounded-lg">
+                Error: {error.message}
               </div>
             )}
 

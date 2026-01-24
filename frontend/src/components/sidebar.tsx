@@ -46,16 +46,10 @@ export function Sidebar({ className }: SidebarProps) {
     return () => clearInterval(interval)
   }, [])
 
-  const handleNewChat = async () => {
-    try {
-      const response = await fetch("/api/chats", { method: "POST" })
-      if (response.ok) {
-        const chat = await response.json()
-        router.push(`/chat/${chat.id}`)
-      }
-    } catch (error) {
-      console.error("Failed to create chat:", error)
-    }
+  const handleNewChat = () => {
+    // Navigate to home page for a fresh chat experience
+    // Chat will be created when user submits their first message
+    router.push("/")
   }
 
   const handleDeleteChat = async (chatId: string, e: React.MouseEvent) => {

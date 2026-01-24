@@ -3,7 +3,13 @@ import { NextResponse } from "next/server";
 
 export async function GET() {
   try {
+    // Only fetch chats that have at least one message (filter out empty chats)
     const chats = await db.chat.findMany({
+      where: {
+        messages: {
+          some: {}, // Only chats with at least one message
+        },
+      },
       orderBy: { updatedAt: "desc" },
       include: {
         messages: {

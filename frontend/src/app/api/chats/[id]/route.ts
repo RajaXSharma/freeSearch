@@ -3,10 +3,10 @@ import { NextResponse } from "next/server";
 
 export async function GET(
   request: Request,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const chatId = params.id;
+    const { id: chatId } = await params;
 
     const chat = await db.chat.findUnique({
       where: { id: chatId },
@@ -33,10 +33,10 @@ export async function GET(
 
 export async function DELETE(
   request: Request,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const chatId = params.id;
+    const { id: chatId } = await params;
 
     await db.chat.delete({
       where: { id: chatId },

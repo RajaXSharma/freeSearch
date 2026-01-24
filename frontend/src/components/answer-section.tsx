@@ -10,6 +10,7 @@ import { Copy, Check } from "lucide-react"
 interface AnswerSectionProps {
   content: string
   isLoading: boolean
+  skipAnimation?: boolean // Skip typewriter effect for historical messages
 }
 
 // Memoized Markdown component to prevent unnecessary re-renders
@@ -20,12 +21,19 @@ const MemoizedReactMarkdown = React.memo(
     prevProps.className === nextProps.className
 )
 
-export function AnswerSection({ content, isLoading }: AnswerSectionProps) {
-  const [displayedContent, setDisplayedContent] = React.useState("")
-  const [isDoneTyping, setIsDoneTyping] = React.useState(false)
+export function AnswerSection({ content, isLoading, skipAnimation = false }: AnswerSectionProps) {
+  const [displayedContent, setDisplayedContent] = React.useState(skipAnimation ? content : "")
+  const [isDoneTyping, setIsDoneTyping] = React.useState(skipAnimation)
 
-  // Typewriter effect
+  // Typewriter effect (only when not skipping animation)
   React.useEffect(() => {
+    // Skip animation - just show content immediately
+    if (skipAnimation) {
+      setDisplayedContent(content)
+      setIsDoneTyping(true)
+      return
+    }
+
     if (isLoading) {
       setDisplayedContent("")
       setIsDoneTyping(false)
@@ -52,7 +60,7 @@ export function AnswerSection({ content, isLoading }: AnswerSectionProps) {
       mounted = false
       clearInterval(interval)
     }
-  }, [content, isLoading])
+  }, [content, isLoading, skipAnimation])
 
   return (
     <div className="prose prose-zinc dark:prose-invert max-w-none w-full">

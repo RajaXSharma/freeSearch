@@ -1,21 +1,13 @@
 import { ChatOpenAI } from "@langchain/openai";
-import { ChatPromptTemplate, MessagesPlaceholder } from "@langchain/core/prompts";
-import { StringOutputParser } from "@langchain/core/output_parsers";
-import { RunnableSequence } from "@langchain/core/runnables";
-import { HumanMessage, AIMessage, SystemMessage } from "@langchain/core/messages";
 
 const LLAMA_API_URL = process.env.LLAMA_API_URL || "http://localhost:8080/v1";
 
-/**
- * LangChain ChatOpenAI model connected to llama.cpp
- * llama.cpp exposes an OpenAI-compatible API
- */
 export const chatModel = new ChatOpenAI({
-  openAIApiKey: "not-needed",
+  apiKey: "not-needed", // llama.cpp doesn't require an API key
   configuration: {
     baseURL: LLAMA_API_URL,
   },
-  modelName: "qwen3-4b", // Ignored by llama.cpp, uses loaded model
+  model: "qwen3-4b", // Model name (informational, llama.cpp uses loaded model)
   temperature: 0.7,
   streaming: true,
 });
@@ -34,42 +26,15 @@ Guidelines:
 - If asked a follow-up question, use context from the conversation`;
 
 /**
- * RAG prompt template
- */
-export const ragPromptTemplate = ChatPromptTemplate.fromMessages([
-  ["system", SYSTEM_PROMPT],
-  new MessagesPlaceholder("history"),
-  ["human", `Based on the following search results, answer the user's question.
-
-Search Results:
-{sources}
-
-User Question: {question}`],
-]);
-
-/**
- * Create a RAG chain for processing queries with search results
- */
-export function createRAGChain() {
-  return RunnableSequence.from([
-    ragPromptTemplate,
-    chatModel,
-    new StringOutputParser(),
-  ]);
-}
-
-/**
  * Convert chat history to LangChain message format
+ * Uses tuple format [role, content] which is compatible with BaseMessageLike
  */
 export function convertToLangChainMessages(
   messages: Array<{ role: string; content: string }>
-): Array<HumanMessage | AIMessage> {
+): Array<[string, string]> {
   return messages.map((msg) => {
-    if (msg.role === "user") {
-      return new HumanMessage(msg.content);
-    } else {
-      return new AIMessage(msg.content);
-    }
+    const role = msg.role === "user" ? "human" : "assistant";
+    return [role, msg.content] as [string, string];
   });
 }
 
