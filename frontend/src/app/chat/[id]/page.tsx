@@ -206,7 +206,7 @@ export default function ChatPage() {
                           <h3 className="text-sm font-semibold mb-3 flex items-center gap-2">
                             <span className="text-lg">✦</span> Sources
                           </h3>
-                          <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+                          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
                             {currentSources.map((source) => (
                               <SourceCard key={source.index} source={source} />
                             ))}

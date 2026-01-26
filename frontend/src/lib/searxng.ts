@@ -20,6 +20,18 @@ const searxngTool = new SearxngSearch({
 });
 
 /**
+ * Parse a single result object into SearchResult format
+ */
+function parseResultItem(r: Record<string, unknown>): SearchResult {
+  return {
+    title: (r.title as string) || "Untitled",
+    url: (r.link as string) || (r.url as string) || "",
+    content: (r.snippet as string) || (r.content as string) || "",
+    engine: (r.engine as string) || "searxng",
+  };
+}
+
+/**
  * Search using SearXNG via LangChain (internal implementation)
  * @param query - The search query
  * @param limit - Maximum number of results (default: 5)
@@ -31,36 +43,64 @@ async function searchWebInternal(
   try {
     const rawResults = await searxngTool.invoke(query);
 
-    // Parse the string result from SearXNG tool
+    console.log("[SearXNG] Raw results type:", typeof rawResults);
+    console.log("[SearXNG] Raw results:", rawResults?.toString().substring(0, 500));
+
     let results: SearchResult[] = [];
 
-    // The tool returns a string, try to parse it
     if (typeof rawResults === "string") {
       try {
         const parsed = JSON.parse(rawResults);
+
+        // Case 1: Direct array of results
         if (Array.isArray(parsed)) {
-          results = parsed.slice(0, limit).map((r: { title?: string; link?: string; url?: string; snippet?: string; content?: string; engine?: string }) => ({
-            title: r.title || "Untitled",
-            url: r.link || r.url || "",
-            content: r.snippet || r.content || "",
-            engine: r.engine || "searxng",
-          }));
+          results = parsed.slice(0, limit).map(parseResultItem);
+        }
+        // Case 2: Object with 'results' array (SearXNG API format)
+        else if (parsed && typeof parsed === "object" && Array.isArray(parsed.results)) {
+          results = parsed.results.slice(0, limit).map(parseResultItem);
+        }
+        // Case 3: Single result object
+        else if (parsed && typeof parsed === "object" && (parsed.title || parsed.url)) {
+          results = [parseResultItem(parsed)];
         }
       } catch {
-        // If parsing fails, return the raw string as a single result
-        results = [{
-          title: "Search Results",
-          url: "",
-          content: rawResults,
-          engine: "searxng",
-        }];
+        // Try parsing as newline-separated JSON objects
+        try {
+          const lines = rawResults.split("\n").filter((line: string) => line.trim());
+          const parsedResults: SearchResult[] = [];
+
+          for (const line of lines) {
+            try {
+              const obj = JSON.parse(line);
+              if (obj && (obj.title || obj.url || obj.link)) {
+                parsedResults.push(parseResultItem(obj));
+              }
+            } catch {
+              // Skip invalid lines
+            }
+          }
+
+          if (parsedResults.length > 0) {
+            results = parsedResults.slice(0, limit);
+          }
+        } catch {
+          // Final fallback: use direct API
+          console.log("[SearXNG] Parsing failed, falling back to direct API");
+          return await searchWebDirect(query, limit);
+        }
       }
+    }
+
+    // If no results from LangChain tool, try direct API
+    if (results.length === 0) {
+      console.log("[SearXNG] No results from LangChain tool, trying direct API");
+      return await searchWebDirect(query, limit);
     }
 
     return results;
   } catch (error) {
     console.error("SearXNG search failed:", error);
-    // Fallback to direct API call if LangChain tool fails
     return await searchWebDirect(query, limit);
   }
 }
