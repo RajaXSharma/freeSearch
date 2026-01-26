@@ -177,7 +177,7 @@ const CodeBlock = React.memo(function CodeBlock({ language, value }: { language:
     <div className="relative my-4 rounded-lg border bg-zinc-950">
       {Header}
       <div
-        className="overflow-x-auto p-4 text-sm [&>pre]:!bg-transparent [&>pre]:!p-0"
+        className="overflow-x-auto p-4 text-sm [&>pre]:bg-transparent! [&>pre]:p-0!"
         dangerouslySetInnerHTML={{ __html: html }}
       />
     </div>

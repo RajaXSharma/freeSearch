@@ -2,7 +2,7 @@
 
 import * as React from "react"
 import Link from "next/link"
-import { useRouter } from "next/navigation"
+import { useRouter, usePathname } from "next/navigation"
 import { Plus, Settings, Menu, MessageSquare, Trash2 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { ScrollArea } from "@/components/ui/scroll-area"
@@ -11,6 +11,16 @@ import { ThemeToggle } from "@/components/theme-toggle"
 import { cn } from "@/lib/utils"
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
 import { PanelLeft, PanelLeftClose } from "lucide-react"
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog"
 
 interface Chat {
   id: string
@@ -23,7 +33,9 @@ type SidebarProps = React.HTMLAttributes<HTMLDivElement>
 export function Sidebar({ className }: SidebarProps) {
   const [isCollapsed, setIsCollapsed] = React.useState(false)
   const [chats, setChats] = React.useState<Chat[]>([])
+  const [chatToDelete, setChatToDelete] = React.useState<string | null>(null)
   const router = useRouter()
+  const pathname = usePathname()
 
   // Fetch chat history
   React.useEffect(() => {
@@ -52,18 +64,32 @@ export function Sidebar({ className }: SidebarProps) {
     router.push("/")
   }
 
-  const handleDeleteChat = async (chatId: string, e: React.MouseEvent) => {
+  const confirmDeleteChat = async (e: React.MouseEvent) => {
     e.preventDefault()
     e.stopPropagation()
-    
+
+    if (!chatToDelete) return
+
     try {
-      const response = await fetch(`/api/chats/${chatId}`, { method: "DELETE" })
+      const response = await fetch(`/api/chats/${chatToDelete}`, { method: "DELETE" })
       if (response.ok) {
-        setChats((prev) => prev.filter((c) => c.id !== chatId))
+        setChats((prev) => prev.filter((c) => c.id !== chatToDelete))
+        // Redirect to home if the deleted chat is currently being viewed
+        if (pathname === `/chat/${chatToDelete}`) {
+          router.push("/")
+        }
       }
     } catch (error) {
       console.error("Failed to delete chat:", error)
+    } finally {
+      setChatToDelete(null)
     }
+  }
+
+  const openDeleteDialog = (chatId: string, e: React.MouseEvent) => {
+    e.preventDefault()
+    e.stopPropagation()
+    setChatToDelete(chatId)
   }
 
   return (
@@ -80,7 +106,7 @@ export function Sidebar({ className }: SidebarProps) {
           <SidebarContent 
             chats={chats} 
             onNewChat={handleNewChat}
-            onDelete={handleDeleteChat}
+            onDelete={openDeleteDialog}
           />
         </SheetContent>
       </Sheet>
@@ -155,19 +181,21 @@ export function Sidebar({ className }: SidebarProps) {
                         </p>
                       ) : (
                         chats.map((chat) => (
-                          <Link key={chat.id} href={`/chat/${chat.id}`}>
-                            <Button
-                              variant="ghost"
-                              className="w-full justify-start gap-2 truncate text-sm font-normal h-9 group"
-                            >
-                              <MessageSquare className="h-3 w-3 text-muted-foreground flex-shrink-0" />
-                              <span className="truncate flex-1 text-left">{chat.title}</span>
+                          <Button
+                            key={chat.id}
+                            variant="ghost"
+                            asChild
+                            className="w-full grid grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-2 text-sm font-normal h-9 group overflow-hidden max-w-full"
+                          >
+                            <Link href={`/chat/${chat.id}`}>
+                              <MessageSquare className="h-3 w-3 text-muted-foreground" />
+                              <span className="truncate text-left">{chat.title}</span>
                               <Trash2 
-                                className="h-3 w-3 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0"
-                                onClick={(e) => handleDeleteChat(chat.id, e)}
+                                className="h-3 w-3 text-muted-foreground hover:text-destructive transition-colors z-10 opacity-0 group-hover:opacity-100"
+                                onClick={(e) => openDeleteDialog(chat.id, e)}
                               />
-                            </Button>
-                          </Link>
+                            </Link>
+                          </Button>
                         ))
                       )}
                   </div>
@@ -208,6 +236,21 @@ export function Sidebar({ className }: SidebarProps) {
               </div>
            </div>
         </div>
+        
+        <AlertDialog open={!!chatToDelete} onOpenChange={(open: boolean) => !open && setChatToDelete(null)}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
+              <AlertDialogDescription>
+                This action cannot be undone. This will permanently delete your chat history.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel onClick={() => setChatToDelete(null)}>Cancel</AlertDialogCancel>
+              <AlertDialogAction onClick={confirmDeleteChat} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">Delete</AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
       </aside>
     </TooltipProvider>
   )
@@ -218,6 +261,13 @@ interface SidebarContentProps {
   onNewChat: () => void
   onDelete: (chatId: string, e: React.MouseEvent) => void
 }
+
+// Note: SidebarContent is for mobile view, passing props down.
+// Since AlertDialog needs state, we might need to lift state or duplicate it.
+// For simplicity in this refactor, I'll keep SidebarContent mostly purely presentational
+// but properly wiring the delete action requires the parent to handle it if we want one dialog.
+// However, SidebarContent is rendered inside a specific SheetContent.
+// Let's pass the onDelete handler which is now openDeleteDialog.
 
 function SidebarContent({ chats, onNewChat, onDelete }: SidebarContentProps) {
   return (
@@ -255,19 +305,21 @@ function SidebarContent({ chats, onNewChat, onDelete }: SidebarContentProps) {
               </p>
             ) : (
               chats.map((chat) => (
-                <Link key={chat.id} href={`/chat/${chat.id}`}>
-                  <Button
-                    variant="ghost"
-                    className="w-full justify-start gap-2 truncate text-sm font-normal h-9 group"
-                  >
-                    <MessageSquare className="h-3 w-3 text-muted-foreground flex-shrink-0" />
-                    <span className="truncate flex-1 text-left">{chat.title}</span>
+                <Button
+                  key={chat.id}
+                  variant="ghost"
+                  asChild
+                  className="w-full grid grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-2 text-sm font-normal h-9 group overflow-hidden max-w-full"
+                >
+                  <Link href={`/chat/${chat.id}`}>
+                    <MessageSquare className="h-3 w-3 text-muted-foreground" />
+                    <span className="truncate text-left">{chat.title}</span>
                     <Trash2 
-                      className="h-3 w-3 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0"
+                      className="h-3 w-3 text-muted-foreground hover:text-destructive transition-colors z-10 opacity-0 group-hover:opacity-100"
                       onClick={(e) => onDelete(chat.id, e)}
                     />
-                  </Button>
-                </Link>
+                  </Link>
+                </Button>
               ))
             )}
           </div>

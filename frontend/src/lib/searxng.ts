@@ -1,4 +1,5 @@
 import { SearxngSearch } from "@langchain/community/tools/searxng_search";
+import { unstable_cache } from "next/cache";
 
 export interface SearchResult {
   title: string;
@@ -19,11 +20,11 @@ const searxngTool = new SearxngSearch({
 });
 
 /**
- * Search using SearXNG via LangChain
+ * Search using SearXNG via LangChain (internal implementation)
  * @param query - The search query
  * @param limit - Maximum number of results (default: 5)
  */
-export async function searchWeb(
+async function searchWebInternal(
   query: string,
   limit: number = 5
 ): Promise<SearchResult[]> {
@@ -63,6 +64,15 @@ export async function searchWeb(
     return await searchWebDirect(query, limit);
   }
 }
+
+/**
+ * Cached search function - caches results for 5 minutes
+ */
+export const searchWeb = unstable_cache(
+  searchWebInternal,
+  ["searxng-search"],
+  { revalidate: 300 } // 5 minute cache
+);
 
 /**
  * Direct SearXNG API call as fallback

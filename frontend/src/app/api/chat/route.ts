@@ -4,6 +4,26 @@ import { searchWeb, formatSourcesForPrompt, SearchResult } from "@/lib/searxng";
 import { toUIMessageStream } from "@ai-sdk/langchain";
 import { createUIMessageStream, createUIMessageStreamResponse } from "ai";
 
+/** Type for custom sources data part sent to the client */
+type SourcesDataPart = {
+  type: 'data-sources';
+  data: Array<{ title: string; url: string; snippet: string; index: number }>;
+};
+
+/** Extract text content from a UIMessage */
+function extractTextFromMessage(message: any): string {
+  if (message.parts && Array.isArray(message.parts)) {
+    const textParts = message.parts.filter((part: any) => part.type === 'text');
+    return textParts.map((part: any) => part.text).join('');
+  } else if (typeof message.content === 'string') {
+    return message.content;
+  } else if (Array.isArray(message.content)) {
+    const textContent = message.content.find((c: any) => c.type === 'text');
+    return textContent?.text || '';
+  }
+  return '';
+}
+
 export const maxDuration = 60; // Allow streaming for up to 60 seconds
 
 export async function POST(request: Request) {
@@ -21,21 +41,8 @@ export async function POST(request: Request) {
       return new Response("Last message must be from user", { status: 400 });
     }
 
-    // Extract user query from UIMessage format (parts array)
-    let userQuery = '';
-    
-    if (lastMessage.parts && Array.isArray(lastMessage.parts)) {
-      // AI SDK 6.x format: message has parts array
-      const textParts = lastMessage.parts.filter((part: any) => part.type === 'text');
-      userQuery = textParts.map((part: any) => part.text).join('');
-    } else if (typeof lastMessage.content === 'string') {
-      // Fallback: plain string content
-      userQuery = lastMessage.content;
-    } else if (Array.isArray(lastMessage.content)) {
-      // Alternative format: content as array
-      const textContent = lastMessage.content.find((c: any) => c.type === 'text');
-      userQuery = textContent?.text || '';
-    }
+    // Extract user query from UIMessage format
+    const userQuery = extractTextFromMessage(lastMessage);
 
     console.log('[Chat API] User query:', userQuery);
 
@@ -43,41 +50,46 @@ export async function POST(request: Request) {
       return new Response("Message content is empty", { status: 400 });
     }
 
-    // Search the web using SearXNG (via LangChain)
+    // Run search and user message save in parallel
     let sources: SearchResult[] = [];
     let sourcesContext = "";
 
-    try {
-      sources = await searchWeb(userQuery, 5);
-      sourcesContext = formatSourcesForPrompt(sources);
-    } catch (error) {
-      console.error("Search failed, continuing without sources:", error);
-    }
-
-    // Save user message to database if chatId is provided
-    if (chatId) {
-      await db.message.create({
-        data: {
-          chatId,
-          role: "user",
-          content: userQuery,
-        },
+    const searchPromise = searchWeb(userQuery, 5)
+      .then((results) => {
+        sources = results;
+        sourcesContext = formatSourcesForPrompt(sources);
+      })
+      .catch((error) => {
+        console.error("Search failed, continuing without sources:", error);
       });
 
-      // Update chat title if this is the first message
-      const chat = await db.chat.findUnique({
+    const saveUserMessagePromise = chatId
+      ? db.message.create({
+          data: {
+            chatId,
+            role: "user",
+            content: userQuery,
+          },
+        })
+      : Promise.resolve();
+
+    await Promise.all([searchPromise, saveUserMessagePromise]);
+
+    // Update chat title non-blocking (fire-and-forget) if this is the first message
+    if (chatId) {
+      db.chat.findUnique({
         where: { id: chatId },
         include: { messages: true },
-      });
-
-      if (chat && chat.messages.length <= 1) {
-        const title =
-          userQuery.length > 50 ? userQuery.substring(0, 47) + "..." : userQuery;
-        await db.chat.update({
-          where: { id: chatId },
-          data: { title },
-        });
-      }
+      }).then((chat) => {
+        if (chat && chat.messages.length <= 1) {
+          const title =
+            userQuery.length > 50 ? userQuery.substring(0, 47) + "..." : userQuery;
+          db.chat.update({
+            where: { id: chatId },
+            data: { title },
+          }).catch((err) => console.error("Failed to update chat title:", err));
+        }
+      }).catch((err) => console.error("Failed to check chat for title update:", err));
     }
 
     // Build the augmented prompt with search results
@@ -93,19 +105,7 @@ User Question: ${userQuery}`
     // Convert previous messages to LangChain format (using tuple format)
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const previousMessages: Array<[string, string]> = messages.slice(0, -1).map((msg: any) => {
-      let content = '';
-      
-      if (msg.parts && Array.isArray(msg.parts)) {
-        // AI SDK 6.x format
-        const textParts = msg.parts.filter((part: any) => part.type === 'text');
-        content = textParts.map((part: any) => part.text).join('');
-      } else if (typeof msg.content === 'string') {
-        content = msg.content;
-      } else if (Array.isArray(msg.content)) {
-        const textContent = msg.content.find((c: any) => c.type === 'text');
-        content = textContent?.text || '';
-      }
-      
+      const content = extractTextFromMessage(msg);
       // Use tuple format: [role, content] which LangChain accepts
       return [msg.role === 'user' ? 'human' : 'assistant', content] as [string, string];
     });
@@ -131,7 +131,7 @@ User Question: ${userQuery}`
       execute: async ({ writer }) => {
         // First, send sources as custom data
         if (capturedSources.length > 0) {
-          writer.write({
+          const sourcesDataPart: SourcesDataPart = {
             type: 'data-sources',
             data: capturedSources.map((s, idx) => ({
               title: s.title || s.url,
@@ -139,7 +139,8 @@ User Question: ${userQuery}`
               snippet: s.content,
               index: idx + 1,
             })),
-          });
+          };
+          writer.write(sourcesDataPart);
         }
 
         // Stream the LLM response using LangChain

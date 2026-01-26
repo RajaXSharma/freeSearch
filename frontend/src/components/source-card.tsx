@@ -1,5 +1,3 @@
-import Image from "next/image"
-
 export interface Source {
   title: string
   url: string
@@ -12,15 +10,22 @@ interface SourceCardProps {
 }
 
 export function SourceCard({ source }: SourceCardProps) {
-  // Use a fallback for favicon if not present, e.g., a simple globe icon or domain parse
-  const domain = new URL(source.url).hostname
+  // Safely parse domain from URL, fallback to empty string for invalid URLs
+  let domain = ""
+  try {
+    if (source.url) {
+      domain = new URL(source.url).hostname
+    }
+  } catch {
+    // Invalid URL, keep domain empty
+  }
 
   return (
     <a
       href={source.url}
       target="_blank"
       rel="noopener noreferrer"
-      className="flex min-w-[200px] max-w-[240px] flex-col gap-2 rounded-lg border bg-card p-3 transition-colors hover:bg-secondary/50"
+      className="flex min-w-50 max-w-60 flex-col gap-2 rounded-lg border bg-card p-3 transition-colors hover:bg-secondary/50"
     >
       <div className="text-xs font-semibold text-muted-foreground truncate">
         {source.title}
