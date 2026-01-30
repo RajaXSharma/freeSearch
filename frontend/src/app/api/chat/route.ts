@@ -1,30 +1,80 @@
 import { db } from "@/lib/db";
-import { chatModel, SYSTEM_PROMPT } from "@/lib/llm";
-import { searchWeb, formatSourcesForPrompt, SearchResult } from "@/lib/searxng";
+import { chatModelWithTools, tools, SYSTEM_PROMPT, chatModel, rewriteQuery } from "@/lib/llm";
+import { getSearchResultsStructured, SearchResult } from "@/lib/searxng";
 import { toUIMessageStream } from "@ai-sdk/langchain";
 import { createUIMessageStream, createUIMessageStreamResponse } from "ai";
+import { HumanMessage, AIMessage, SystemMessage, ToolMessage } from "@langchain/core/messages";
+import { type BaseMessage } from "@langchain/core/messages";
 
 /** Type for custom sources data part sent to the client */
 type SourcesDataPart = {
-  type: 'data-sources';
+  type: "data-sources";
   data: Array<{ title: string; url: string; snippet: string; index: number }>;
 };
 
 /** Extract text content from a UIMessage */
 function extractTextFromMessage(message: any): string {
   if (message.parts && Array.isArray(message.parts)) {
-    const textParts = message.parts.filter((part: any) => part.type === 'text');
-    return textParts.map((part: any) => part.text).join('');
-  } else if (typeof message.content === 'string') {
+    const textParts = message.parts.filter((part: any) => part.type === "text");
+    return textParts.map((part: any) => part.text).join("");
+  } else if (typeof message.content === "string") {
     return message.content;
   } else if (Array.isArray(message.content)) {
-    const textContent = message.content.find((c: any) => c.type === 'text');
-    return textContent?.text || '';
+    const textContent = message.content.find((c: any) => c.type === "text");
+    return textContent?.text || "";
   }
-  return '';
+  return "";
 }
 
-export const maxDuration = 60; // Allow streaming for up to 60 seconds
+/** Convert UI messages to LangChain message objects */
+function toLangChainMessages(messages: any[]): BaseMessage[] {
+  return messages.map((msg) => {
+    const content = extractTextFromMessage(msg);
+    if (msg.role === "user") {
+      return new HumanMessage(content);
+    } else {
+      return new AIMessage(content);
+    }
+  });
+}
+
+/** Execute a tool by name */
+async function executeTool(
+  toolName: string,
+  toolArgs: Record<string, unknown>,
+  rewrittenQuery: string // Pre-rewritten query with context
+): Promise<{ result: string; sources: SearchResult[] }> {
+  console.log(`[Agent] Executing tool: ${toolName}`, toolArgs);
+
+  // For web_search, use the pre-rewritten query (already has context)
+  if (toolName === "web_search") {
+    // Use the rewritten query instead of the tool's query
+    console.log(`[Agent] Searching with rewritten query: "${rewrittenQuery}"`);
+
+    const sources = await getSearchResultsStructured(rewrittenQuery);
+
+    if (sources.length === 0) {
+      return { result: "No search results found for this query.", sources: [] };
+    }
+
+    // Format results for the LLM
+    const result = sources
+      .map((r, i) => `[${i + 1}] ${r.title}\nURL: ${r.url}\n${r.content}`)
+      .join("\n\n");
+
+    return { result, sources };
+  }
+
+  // For other tools, use the tool directly
+  const tool = tools.find((t) => t.name === toolName);
+  if (!tool) {
+    return { result: `Tool ${toolName} not found`, sources: [] };
+  }
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const result = await tool.invoke(toolArgs as any);
+  return { result: String(result), sources: [] };
+}
 
 export async function POST(request: Request) {
   try {
@@ -41,98 +91,150 @@ export async function POST(request: Request) {
       return new Response("Last message must be from user", { status: 400 });
     }
 
-    // Extract user query from UIMessage format
     const userQuery = extractTextFromMessage(lastMessage);
-
-    console.log('[Chat API] User query:', userQuery);
+    console.log("[Chat API] User query:", userQuery);
 
     if (!userQuery.trim()) {
       return new Response("Message content is empty", { status: 400 });
     }
 
-    // Run search and user message save in parallel
-    let sources: SearchResult[] = [];
-    let sourcesContext = "";
-
-    const searchPromise = searchWeb(userQuery, 5)
-      .then((results) => {
-        sources = results;
-        sourcesContext = formatSourcesForPrompt(sources);
-      })
-      .catch((error) => {
-        console.error("Search failed, continuing without sources:", error);
+    // Save user message to database
+    if (chatId) {
+      await db.message.create({
+        data: {
+          chatId,
+          role: "user",
+          content: userQuery,
+        },
       });
 
-    const saveUserMessagePromise = chatId
-      ? db.message.create({
-          data: {
-            chatId,
-            role: "user",
-            content: userQuery,
-          },
+      // Update chat title if first message
+      db.chat
+        .findUnique({
+          where: { id: chatId },
+          include: { messages: true },
         })
-      : Promise.resolve();
-
-    await Promise.all([searchPromise, saveUserMessagePromise]);
-
-    // Update chat title non-blocking (fire-and-forget) if this is the first message
-    if (chatId) {
-      db.chat.findUnique({
-        where: { id: chatId },
-        include: { messages: true },
-      }).then((chat) => {
-        if (chat && chat.messages.length <= 1) {
-          const title =
-            userQuery.length > 50 ? userQuery.substring(0, 47) + "..." : userQuery;
-          db.chat.update({
-            where: { id: chatId },
-            data: { title },
-          }).catch((err) => console.error("Failed to update chat title:", err));
-        }
-      }).catch((err) => console.error("Failed to check chat for title update:", err));
+        .then((chat) => {
+          if (chat && chat.messages.length <= 1) {
+            const title =
+              userQuery.length > 50
+                ? userQuery.substring(0, 47) + "..."
+                : userQuery;
+            db.chat
+              .update({
+                where: { id: chatId },
+                data: { title },
+              })
+              .catch((err) =>
+                console.error("Failed to update chat title:", err)
+              );
+          }
+        })
+        .catch((err) =>
+          console.error("Failed to check chat for title update:", err)
+        );
     }
 
-    // Build the augmented prompt with search results
-    const augmentedQuery = sourcesContext
-      ? `Based on the following search results, answer the user's question.
-
-Search Results:
-${sourcesContext}
-
-User Question: ${userQuery}`
-      : userQuery;
-
-    // Convert previous messages to LangChain format (using tuple format)
+    // Build conversation history for query rewriting (excluding current message)
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const previousMessages: Array<[string, string]> = messages.slice(0, -1).map((msg: any) => {
+    const conversationHistory: Array<[string, string]> = messages.slice(0, -1).map((msg: any) => {
       const content = extractTextFromMessage(msg);
-      // Use tuple format: [role, content] which LangChain accepts
       return [msg.role === 'user' ? 'human' : 'assistant', content] as [string, string];
     });
 
-    // Build the full message array for LangChain using tuple format
-    // Type assertion needed due to pnpm hoisting creating multiple @langchain/core versions
-    const langChainMessages: Array<[string, string]> = [
-      ['system', SYSTEM_PROMPT],
+    // STEP 1: Rewrite query with conversation context (for better search)
+    const rewrittenQuery = await rewriteQuery(conversationHistory, userQuery);
+    console.log(`[Chat API] Original query: "${userQuery}"`);
+    console.log(`[Chat API] Rewritten query: "${rewrittenQuery}"`);
+
+    // Build LangChain messages with the REWRITTEN query
+    const previousMessages = toLangChainMessages(messages.slice(0, -1));
+    const langChainMessages: BaseMessage[] = [
+      new SystemMessage(SYSTEM_PROMPT),
       ...previousMessages,
-      ['human', augmentedQuery],
+      new HumanMessage(rewrittenQuery), // Use rewritten query for LLM
     ];
 
-    // Capture for closure
-    const capturedSources = sources;
-    const capturedChatId = chatId;
+    // Agent loop - handle tool calls
+    let currentMessages = [...langChainMessages];
+    let collectedSources: SearchResult[] = [];
+    const MAX_ITERATIONS = 5;
+    let toolCallingFailed = false;
 
-    /**
-     * Use createUIMessageStream for advanced streaming with custom data
-     * This allows us to send sources as data parts alongside the LLM response
-     * @see https://ai-sdk.dev/docs/ai-sdk-ui/streaming-data
-     */
+    for (let i = 0; i < MAX_ITERATIONS; i++) {
+      console.log(`[Agent] Iteration ${i + 1}`);
+
+      try {
+        // Call LLM with tools (non-streaming to check for tool calls)
+        console.log("[Agent] Calling LLM with tools...");
+        const response = await chatModelWithTools.invoke(currentMessages);
+        console.log("[Agent] LLM response received");
+        console.log("[Agent] Response content:", typeof response.content === 'string'
+          ? response.content.substring(0, 200)
+          : JSON.stringify(response.content).substring(0, 200));
+
+        // Check if the LLM wants to call tools
+        const toolCalls = response.tool_calls;
+        console.log("[Agent] Tool calls:", toolCalls);
+
+        if (!toolCalls || toolCalls.length === 0) {
+          // No tool calls - LLM is ready to respond
+          console.log("[Agent] No tool calls, ready to stream response");
+          // Don't add response to messages - we'll stream fresh from the original messages
+          break;
+        }
+
+        // Execute each tool call
+        console.log(`[Agent] Tool calls:`, toolCalls.map((tc) => tc.name));
+
+        // Add AI message with tool calls to history
+        currentMessages.push(response);
+
+        for (const toolCall of toolCalls) {
+          const { result, sources } = await executeTool(
+            toolCall.name,
+            toolCall.args as Record<string, unknown>,
+            rewrittenQuery // Pass the pre-rewritten query
+          );
+
+          // Collect sources from search
+          if (sources.length > 0) {
+            collectedSources = [...collectedSources, ...sources];
+          }
+
+          // Add tool result to messages
+          currentMessages.push(
+            new ToolMessage({
+              content: result,
+              tool_call_id: toolCall.id || toolCall.name,
+            })
+          );
+        }
+      } catch (error) {
+        console.error("[Agent] Tool calling failed:", error);
+        toolCallingFailed = true;
+        break;
+      }
+    }
+
+    // If tool calling failed, fall back to regular chat without tools
+    if (toolCallingFailed) {
+      console.log("[Agent] Falling back to regular chat without tools");
+      currentMessages = [...langChainMessages];
+    }
+
+    // Capture for closure
+    const capturedSources = collectedSources;
+    const capturedChatId = chatId;
+    const finalMessages = currentMessages;
+
+    // Stream the final response
     const stream = createUIMessageStream({
       execute: async ({ writer }) => {
-        // First, send sources as custom data
+        // Send sources if we collected any from tool calls
         if (capturedSources.length > 0) {
           const sourcesDataPart: SourcesDataPart = {
-            type: 'data-sources',
+            type: "data-sources",
             data: capturedSources.map((s, idx) => ({
               title: s.title || s.url,
               url: s.url,
@@ -143,30 +245,29 @@ User Question: ${userQuery}`
           writer.write(sourcesDataPart);
         }
 
-        // Stream the LLM response using LangChain
-        // Cast to any to avoid type conflicts from duplicate @langchain/core versions in pnpm
-        const langchainStream = await chatModel.stream(langChainMessages as unknown as Parameters<typeof chatModel.stream>[0]);
-        
-        // Merge the LangChain stream with our UI message stream
-        writer.merge(toUIMessageStream(langchainStream, {
-          onFinal: async (completion: string) => {
-            // Save assistant message to database after streaming completes
-            if (capturedChatId && completion) {
-              try {
-                await db.message.create({
-                  data: {
-                    chatId: capturedChatId,
-                    role: "assistant",
-                    content: completion,
-                    sources: JSON.stringify(capturedSources),
-                  },
-                });
-              } catch (dbError) {
-                console.error("Failed to save assistant message:", dbError);
+        // Stream the LLM response
+        const langchainStream = await chatModel.stream(finalMessages);
+
+        writer.merge(
+          toUIMessageStream(langchainStream, {
+            onFinal: async (completion: string) => {
+              if (capturedChatId && completion) {
+                try {
+                  await db.message.create({
+                    data: {
+                      chatId: capturedChatId,
+                      role: "assistant",
+                      content: completion,
+                      sources: JSON.stringify(capturedSources),
+                    },
+                  });
+                } catch (dbError) {
+                  console.error("Failed to save assistant message:", dbError);
+                }
               }
-            }
-          },
-        }));
+            },
+          })
+        );
       },
     });
 
