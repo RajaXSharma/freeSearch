@@ -1,9 +1,14 @@
 import { db } from "@/lib/db";
-import { chatModelWithTools, tools, SYSTEM_PROMPT, chatModel, rewriteQuery } from "@/lib/llm";
+import {
+  chatModel,
+  classifyQueryHeuristic,
+  classifyAndRewrite,
+  getSystemPromptWithSources,
+} from "@/lib/llm";
 import { getSearchResultsStructured, SearchResult } from "@/lib/searxng";
 import { toUIMessageStream } from "@ai-sdk/langchain";
 import { createUIMessageStream, createUIMessageStreamResponse } from "ai";
-import { HumanMessage, AIMessage, SystemMessage, ToolMessage } from "@langchain/core/messages";
+import { HumanMessage, AIMessage, SystemMessage } from "@langchain/core/messages";
 import { type BaseMessage } from "@langchain/core/messages";
 
 /** Type for custom sources data part sent to the client */
@@ -38,42 +43,22 @@ function toLangChainMessages(messages: any[]): BaseMessage[] {
   });
 }
 
-/** Execute a tool by name */
-async function executeTool(
-  toolName: string,
-  toolArgs: Record<string, unknown>,
-  rewrittenQuery: string // Pre-rewritten query with context
-): Promise<{ result: string; sources: SearchResult[] }> {
-  console.log(`[Agent] Executing tool: ${toolName}`, toolArgs);
+/** Build conversation history for classifier (limited to last 4 messages) */
+function buildConversationHistory(messages: any[]): Array<[string, string]> {
+  // Only last 4 messages for query rewriting context
+  return messages.slice(-4).map((msg: any) => {
+    const content = extractTextFromMessage(msg);
+    // Truncate long messages for classifier
+    const truncated = content.length > 300 ? content.substring(0, 297) + "..." : content;
+    return [msg.role === "user" ? "human" : "assistant", truncated] as [string, string];
+  });
+}
 
-  // For web_search, use the pre-rewritten query (already has context)
-  if (toolName === "web_search") {
-    // Use the rewritten query instead of the tool's query
-    console.log(`[Agent] Searching with rewritten query: "${rewrittenQuery}"`);
-
-    const sources = await getSearchResultsStructured(rewrittenQuery);
-
-    if (sources.length === 0) {
-      return { result: "No search results found for this query.", sources: [] };
-    }
-
-    // Format results for the LLM
-    const result = sources
-      .map((r, i) => `[${i + 1}] ${r.title}\nURL: ${r.url}\n${r.content}`)
-      .join("\n\n");
-
-    return { result, sources };
-  }
-
-  // For other tools, use the tool directly
-  const tool = tools.find((t) => t.name === toolName);
-  if (!tool) {
-    return { result: `Tool ${toolName} not found`, sources: [] };
-  }
-
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const result = await tool.invoke(toolArgs as any);
-  return { result: String(result), sources: [] };
+/** Format search results for LLM context */
+function formatSearchResultsForLLM(sources: SearchResult[]): string {
+  return sources
+    .map((r, i) => `[${i + 1}] ${r.title}\nURL: ${r.url}\n${r.content}`)
+    .join("\n\n");
 }
 
 export async function POST(request: Request) {
@@ -98,21 +83,76 @@ export async function POST(request: Request) {
       return new Response("Message content is empty", { status: 400 });
     }
 
-    // Save user message to database
-    if (chatId) {
-      await db.message.create({
-        data: {
-          chatId,
-          role: "user",
-          content: userQuery,
-        },
-      });
+    // =========================================================================
+    // Step 1: Fast Heuristic Classification (No LLM)
+    // =========================================================================
+    const heuristicDecision = classifyQueryHeuristic(userQuery);
+    console.log(`[Optimize] Heuristic decision: ${heuristicDecision}`);
 
-      // Update chat title if first message
+    // Build conversation history (excluding current message)
+    const conversationHistory = buildConversationHistory(messages.slice(0, -1));
+    const hasHistory = conversationHistory.length > 0;
+
+    // =========================================================================
+    // Step 2: Determine if Search is Needed
+    // =========================================================================
+    let needsSearch = false;
+    let searchQuery = userQuery;
+
+    if (heuristicDecision === "NO_SEARCH") {
+      // Fast path: skip search entirely
+      needsSearch = false;
+      console.log("[Optimize] Fast path: NO_SEARCH (heuristic)");
+    } else if (heuristicDecision === "SEARCH") {
+      // Fast path: search is definitely needed
+      needsSearch = true;
+
+      // If there's history, we need to rewrite the query for context
+      if (hasHistory) {
+        console.log("[Optimize] SEARCH with history - rewriting query");
+        const result = await classifyAndRewrite(conversationHistory, userQuery);
+        searchQuery = result.query;
+      }
+      console.log(`[Optimize] Fast path: SEARCH, query: "${searchQuery}"`);
+    } else {
+      // AMBIGUOUS: use LLM classifier to decide
+      console.log("[Optimize] Ambiguous - calling LLM classifier");
+      const result = await classifyAndRewrite(conversationHistory, userQuery);
+      needsSearch = result.decision === "SEARCH";
+      searchQuery = result.query;
+      console.log(`[Optimize] LLM decision: ${result.decision}, query: "${searchQuery}"`);
+    }
+
+    // =========================================================================
+    // Step 3: Execute Search if Needed (parallel with DB save)
+    // =========================================================================
+    let collectedSources: SearchResult[] = [];
+
+    // Run search and DB save in parallel
+    const [sources, _] = await Promise.all([
+      // Search if needed
+      needsSearch ? getSearchResultsStructured(searchQuery) : Promise.resolve([]),
+      // Save user message to database
+      chatId
+        ? db.message.create({
+            data: {
+              chatId,
+              role: "user",
+              content: userQuery,
+            },
+          })
+        : Promise.resolve(null),
+    ]);
+
+    collectedSources = sources;
+    console.log(`[Optimize] Search results: ${collectedSources.length} sources`);
+
+    // Update chat title if first message (fire-and-forget)
+    if (chatId) {
       db.chat
         .findUnique({
           where: { id: chatId },
-          include: { messages: true },
+          include: { messages: { select: { id: true }, take: 2 } },
         })
         .then((chat) => {
           if (chat && chat.messages.length <= 1) {
@@ -135,103 +175,40 @@ export async function POST(request: Request) {
         );
     }
 
-    // Build conversation history for query rewriting (excluding current message)
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const conversationHistory: Array<[string, string]> = messages.slice(0, -1).map((msg: any) => {
-      const content = extractTextFromMessage(msg);
-      return [msg.role === 'user' ? 'human' : 'assistant', content] as [string, string];
-    });
+    // =========================================================================
+    // Step 4: Build Messages and Stream Response (with sliding window)
+    // =========================================================================
+    const MAX_HISTORY_MESSAGES = 6; // Keep last 6 messages (3 turns)
+    const recentMessages = messages.slice(0, -1).slice(-MAX_HISTORY_MESSAGES);
+    const previousMessages = toLangChainMessages(recentMessages);
+    const hasSearchResults = collectedSources.length > 0;
 
-    // STEP 1: Rewrite query with conversation context (for better search)
-    const rewrittenQuery = await rewriteQuery(conversationHistory, userQuery);
-    console.log(`[Chat API] Original query: "${userQuery}"`);
-    console.log(`[Chat API] Rewritten query: "${rewrittenQuery}"`);
+    console.log(`[Context] Using ${recentMessages.length}/${messages.length - 1} history messages`);
 
-    // Build LangChain messages with the REWRITTEN query
-    const previousMessages = toLangChainMessages(messages.slice(0, -1));
+    // Build final messages for LLM
     const langChainMessages: BaseMessage[] = [
-      new SystemMessage(SYSTEM_PROMPT),
+      new SystemMessage(getSystemPromptWithSources(hasSearchResults)),
       ...previousMessages,
-      new HumanMessage(rewrittenQuery), // Use rewritten query for LLM
     ];
 
-    // Agent loop - handle tool calls
-    let currentMessages = [...langChainMessages];
-    let collectedSources: SearchResult[] = [];
-    const MAX_ITERATIONS = 5;
-    let toolCallingFailed = false;
-
-    for (let i = 0; i < MAX_ITERATIONS; i++) {
-      console.log(`[Agent] Iteration ${i + 1}`);
-
-      try {
-        // Call LLM with tools (non-streaming to check for tool calls)
-        console.log("[Agent] Calling LLM with tools...");
-        const response = await chatModelWithTools.invoke(currentMessages);
-        console.log("[Agent] LLM response received");
-        console.log("[Agent] Response content:", typeof response.content === 'string'
-          ? response.content.substring(0, 200)
-          : JSON.stringify(response.content).substring(0, 200));
-
-        // Check if the LLM wants to call tools
-        const toolCalls = response.tool_calls;
-        console.log("[Agent] Tool calls:", toolCalls);
-
-        if (!toolCalls || toolCalls.length === 0) {
-          // No tool calls - LLM is ready to respond
-          console.log("[Agent] No tool calls, ready to stream response");
-          // Don't add response to messages - we'll stream fresh from the original messages
-          break;
-        }
-
-        // Execute each tool call
-        console.log(`[Agent] Tool calls:`, toolCalls.map((tc) => tc.name));
-
-        // Add AI message with tool calls to history
-        currentMessages.push(response);
-
-        for (const toolCall of toolCalls) {
-          const { result, sources } = await executeTool(
-            toolCall.name,
-            toolCall.args as Record<string, unknown>,
-            rewrittenQuery // Pass the pre-rewritten query
-          );
-
-          // Collect sources from search
-          if (sources.length > 0) {
-            collectedSources = [...collectedSources, ...sources];
-          }
-
-          // Add tool result to messages
-          currentMessages.push(
-            new ToolMessage({
-              content: result,
-              tool_call_id: toolCall.id || toolCall.name,
-            })
-          );
-        }
-      } catch (error) {
-        console.error("[Agent] Tool calling failed:", error);
-        toolCallingFailed = true;
-        break;
-      }
-    }
-
-    // If tool calling failed, fall back to regular chat without tools
-    if (toolCallingFailed) {
-      console.log("[Agent] Falling back to regular chat without tools");
-      currentMessages = [...langChainMessages];
+    // If we have search results, add them before the user query
+    if (hasSearchResults) {
+      const searchContext = formatSearchResultsForLLM(collectedSources);
+      langChainMessages.push(
+        new HumanMessage(`Search results:\n${searchContext}\n\nUser question: ${userQuery}`)
+      );
+    } else {
+      langChainMessages.push(new HumanMessage(userQuery));
     }
 
     // Capture for closure
     const capturedSources = collectedSources;
     const capturedChatId = chatId;
-    const finalMessages = currentMessages;
 
-    // Stream the final response
+    // Stream the response
     const stream = createUIMessageStream({
       execute: async ({ writer }) => {
-        // Send sources if we collected any from tool calls
+        // Send sources first if we have any
         if (capturedSources.length > 0) {
           const sourcesDataPart: SourcesDataPart = {
             type: "data-sources",
@@ -245,8 +222,9 @@ export async function POST(request: Request) {
           writer.write(sourcesDataPart);
         }
 
-        // Stream the LLM response
-        const langchainStream = await chatModel.stream(finalMessages);
+        // Stream LLM response
+        console.log("[Optimize] Streaming LLM response");
+        const langchainStream = await chatModel.stream(langChainMessages);
 
         writer.merge(
           toUIMessageStream(langchainStream, {

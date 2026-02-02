@@ -1,6 +1,4 @@
 import { SearxngSearch } from "@langchain/community/tools/searxng_search";
-import { DynamicStructuredTool } from "@langchain/core/tools";
-import { z } from "zod";
 import { unstable_cache } from "next/cache";
 
 export interface SearchResult {
@@ -97,9 +95,9 @@ async function searchWebInternal(
 }
 
 /**
- * Cached search function - caches results for 5 minutes
+ * Cached search function - caches results for 5 minutes (internal)
  */
-export const searchWeb = unstable_cache(
+const searchWeb = unstable_cache(
   searchWebInternal,
   ["searxng-search"],
   { revalidate: 300 } // 5 minute cache
@@ -142,57 +140,9 @@ async function searchWebDirect(
 }
 
 /**
- * Format search results for LLM context
- */
-export function formatSourcesForPrompt(sources: SearchResult[]): string {
-  if (sources.length === 0) return "";
-
-  return sources
-    .map(
-      (source, index) =>
-        `[${index + 1}] ${source.title}\nURL: ${source.url}\n${source.content}`
-    )
-    .join("\n\n");
-}
-
-/**
- * Get the SearXNG tool for use in LangChain agents (raw LangChain tool)
- */
-export function getSearxngTool() {
-  return searxngTool;
-}
-
-/**
- * Web search tool for LangChain agents
- * The LLM can call this tool when it needs to search the web
- */
-export const webSearchTool = new DynamicStructuredTool({
-  name: "web_search",
-  description: "Search the web for current information. Use this when you need to find up-to-date information, facts, news, or answers about topics you're not certain about. Input should be a search query.",
-  schema: z.object({
-    query: z.string().describe("The search query to look up on the web"),
-  }),
-  func: async ({ query }) => {
-    console.log("[WebSearchTool] Searching for:", query);
-    const results = await searchWebInternal(query, 5);
-
-    if (results.length === 0) {
-      return "No search results found for this query.";
-    }
-
-    // Format results for the LLM
-    const formatted = results
-      .map((r, i) => `[${i + 1}] ${r.title}\nURL: ${r.url}\n${r.content}`)
-      .join("\n\n");
-
-    console.log("[WebSearchTool] Found", results.length, "results");
-    return formatted;
-  },
-});
-
-/**
  * Get search results as structured data (for sources display)
+ * Uses cached version for better performance
  */
 export async function getSearchResultsStructured(query: string): Promise<SearchResult[]> {
-  return searchWebInternal(query, 5);
+  return searchWeb(query, 5);
 }
