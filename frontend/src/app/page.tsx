@@ -4,7 +4,7 @@ import * as React from "react"
 import { useRouter } from "next/navigation"
 import { Sidebar } from "@/components/sidebar"
 import { SearchInput } from "@/components/search-input"
-import { Button } from "@/components/ui/button"
+
 
 export default function Page() {
   const router = useRouter()
@@ -36,11 +36,11 @@ export default function Page() {
   }
 
   return (
-    <div className="flex h-screen w-full overflow-hidden bg-background text-foreground font-sans">
+    <div className="flex h-screen w-full overflow-hidden bg-[#0a0a0a] text-foreground font-sans selection:bg-teal-500/30">
       <Sidebar />
       
       <main className="flex-1 flex flex-col items-center justify-center p-4 animate-in fade-in duration-500">
-        <h1 className="text-4xl md:text-5xl font-light mb-8 font-serif text-center">
+        <h1 className="text-4xl md:text-5xl font-normal mb-8 font-serif text-center tracking-tight text-balance text-white/90">
           Where knowledge begins
         </h1>
         <SearchInput 
@@ -50,23 +50,6 @@ export default function Page() {
           disabled={isCreatingChat}
         />
         
-        <div className="mt-8 flex flex-wrap justify-center gap-2">
-          {[
-            "Plan a trip to Kyoto", 
-            "Explain Quantum Entanglement", 
-            "Best React patterns"
-          ].map((q) => (
-            <Button 
-              key={q} 
-              variant="secondary" 
-              className="text-xs rounded-full" 
-              onClick={() => handleSearch(q)}
-              disabled={isCreatingChat}
-            >
-              {q}
-            </Button>
-          ))}
-        </div>
       </main>
     </div>
   )

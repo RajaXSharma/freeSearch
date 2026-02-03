@@ -11,6 +11,8 @@ interface AnswerSectionProps {
   content: string
   isLoading: boolean
   skipAnimation?: boolean // Skip typewriter effect for historical messages
+  onToggleSources?: () => void
+  sourceCount?: number
 }
 
 // Memoized Markdown component to prevent unnecessary re-renders
@@ -21,7 +23,7 @@ const MemoizedReactMarkdown = React.memo(
     prevProps.className === nextProps.className
 )
 
-export function AnswerSection({ content, isLoading, skipAnimation = false }: AnswerSectionProps) {
+export function AnswerSection({ content, isLoading, skipAnimation = false, ...props }: AnswerSectionProps) {
   const [displayedContent, setDisplayedContent] = React.useState(skipAnimation ? content : "")
   const [isDoneTyping, setIsDoneTyping] = React.useState(skipAnimation)
 
@@ -71,22 +73,46 @@ export function AnswerSection({ content, isLoading, skipAnimation = false }: Ans
           <Skeleton className="h-4 w-[80%]" />
         </div>
       ) : (
-        <MemoizedReactMarkdown
-          components={{
-            code({ node, inline, className, children, ...props }: any) {
-              const match = /language-(\w+)/.exec(className || "")
-              return !inline && match ? (
-                <CodeBlock language={match[1]} value={String(children).replace(/\n$/, "")} /> 
-              ) : (
-                <code className={className} {...props}>
-                  {children}
-                </code>
-              )
-            },
-          }}
-        >
-          {displayedContent}
-        </MemoizedReactMarkdown>
+        <>
+          <MemoizedReactMarkdown
+            components={{
+              code({ node, inline, className, children, ...props }: any) {
+                const match = /language-(\w+)/.exec(className || "")
+                return !inline && match ? (
+                  <CodeBlock language={match[1]} value={String(children).replace(/\n$/, "")} /> 
+                ) : (
+                  <code className={className} {...props}>
+                    {children}
+                  </code>
+                )
+              },
+            }}
+          >
+            {displayedContent}
+          </MemoizedReactMarkdown>
+          
+          {isDoneTyping && (
+            <div className="mt-4 flex items-center gap-2">
+                {/* Optional: Add other action buttons typically found in AI chats like copy, regenerate, etc. */}
+                {props.onToggleSources && (
+                    <Button 
+                        variant="outline" 
+                        size="sm" 
+                        className="rounded-full gap-2 text-xs h-8"
+                        onClick={props.onToggleSources}
+                    >
+                        <div className="flex -space-x-2 mr-0.5">
+                           {/* Small visual indication of sources being stacked */}
+                           <div className="w-2 h-2 rounded-full bg-current opacity-60" />
+                           <div className="w-2 h-2 rounded-full bg-current opacity-80" />
+                           <div className="w-2 h-2 rounded-full bg-current" />
+                        </div>
+                        View Sources {props.sourceCount ? `(${props.sourceCount})` : ''}
+                    </Button>
+                )}
+            </div>
+          )}
+        </>
       )}
     </div>
   )

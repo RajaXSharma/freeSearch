@@ -6,9 +6,10 @@ import { useChat, type UIMessage } from "@ai-sdk/react"
 import { DefaultChatTransport } from "ai"
 import { Sidebar } from "@/components/sidebar"
 import { SearchInput } from "@/components/search-input"
-import { SourceCard, type Source } from "@/components/source-card"
+import { type Source } from "@/components/source-card"
 import { AnswerSection } from "@/components/answer-section"
 import { Button } from "@/components/ui/button"
+import { SourceCitations } from "@/components/source-citations"
 import { ArrowLeft, Loader2 } from "lucide-react"
 
 export default function ChatPage() {
@@ -22,6 +23,7 @@ export default function ChatPage() {
   const [hasSubmittedInitialQuery, setHasSubmittedInitialQuery] = React.useState(false)
   const [input, setInput] = React.useState("")
   const [historyMessageIds, setHistoryMessageIds] = React.useState<Set<string>>(new Set())
+  const [isRightSidebarOpen, setIsRightSidebarOpen] = React.useState(false) // State for right sidebar
   const messagesEndRef = React.useRef<HTMLDivElement>(null)
 
  
@@ -140,10 +142,10 @@ export default function ChatPage() {
   const currentQuery = userMessages.length > 0 ? getMessageContent(userMessages[userMessages.length - 1]) : ""
 
   return (
-    <div className="flex h-screen w-full overflow-hidden bg-background text-foreground font-sans">
+    <div className="flex h-screen w-full overflow-hidden bg-[#0f0f0f] text-foreground font-sans selection:bg-teal-500/30">
       <Sidebar />
 
-      <main className="flex-1 flex flex-col relative h-full overflow-hidden">
+      <main className="flex-1 flex flex-col relative h-full overflow-hidden bg-[#0f0f0f]">
         {/* Header */}
         <div className="border-b px-4 py-3 flex items-center gap-3">
           <Button
@@ -200,30 +202,29 @@ export default function ChatPage() {
                     </div>
                   ) : (
                     <div className="space-y-6">
-                      {/* Sources (only show for the most recent response) */}
-                      {idx === messages.length - 1 && currentSources.length > 0 && (
-                        <section>
-                          <h3 className="text-sm font-semibold mb-3 flex items-center gap-2">
-                            <span className="text-lg">✦</span> Sources
-                          </h3>
-                          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-                            {currentSources.map((source) => (
-                              <SourceCard key={source.index} source={source} />
-                            ))}
-                          </div>
-                        </section>
-                      )}
+                      {/* 
+                        For the most recent message, if we have sources, show the header but not the inline cards.
+                        The user can toggle them via the button in AnswerSection. 
+                        Actually, we can just hide the Sources section entirely here since it will be in the sidebar.
+                      */}
 
                       {/* Answer */}
                       <section>
                         <h3 className="text-sm font-semibold mb-3 flex items-center gap-2">
                           <span className="text-lg">✤</span> Answer
                         </h3>
-                        <AnswerSection
-                          content={getMessageContent(message)}
-                          isLoading={isLoading && idx === messages.length - 1}
-                          skipAnimation={historyMessageIds.has(message.id)}
-                        />
+                          <AnswerSection
+                            content={getMessageContent(message)}
+                            isLoading={isLoading && idx === messages.length - 1}
+                            skipAnimation={historyMessageIds.has(message.id)}
+                            onToggleSources={
+                              // Only show sources button for the last message if we have sources
+                              (idx === messages.length - 1 && currentSources.length > 0)
+                                ? () => setIsRightSidebarOpen(prev => !prev) 
+                                : undefined
+                            }
+                            sourceCount={idx === messages.length - 1 ? currentSources.length : 0}
+                          />
                       </section>
                     </div>
                   )}
@@ -267,7 +268,7 @@ export default function ChatPage() {
                 onChange={(e) => setInput(e.target.value)}
                 onSearch={handleSearchInput}
                 placeholder="Ask a follow up..."
-                className="shadow-lg border-primary/10 bg-background"
+                className="shadow-2xl border-white/5 bg-[#0a0a0a]"
                 isLoading={isLoading}
                 disabled={isLoading}
               />
@@ -275,6 +276,13 @@ export default function ChatPage() {
           </div>
         </div>
       </main>
+
+      {/* Source Citations Sidebar */}
+      <SourceCitations 
+        isOpen={isRightSidebarOpen} 
+        onClose={() => setIsRightSidebarOpen(false)} 
+        sources={currentSources}
+      />
     </div>
   )
 }

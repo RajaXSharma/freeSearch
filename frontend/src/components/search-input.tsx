@@ -1,9 +1,10 @@
 "use client"
 
 import * as React from "react"
-import { Search, ArrowRight } from "lucide-react"
+import { ArrowRight, Globe } from "lucide-react"
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
+import { cn } from "@/lib/utils"
 
 interface SearchInputProps extends Omit<React.InputHTMLAttributes<HTMLInputElement>, 'onChange'> {
   onSearch: (query: string) => void
@@ -53,21 +54,43 @@ export function SearchInput({
     }
   }
 
+  // Determine which icon to show
+  const Icon = isLoading ? (
+    // Simple spinner for loading state
+    <div className="h-5 w-5 animate-spin rounded-full border-2 border-primary border-t-transparent" />
+  ) : (
+    // Globe icon that rotates slowly (Insight Star concept with Globe)
+    <Globe className="h-5 w-5 text-teal-400 animate-spin-slow" />
+  )
+
   return (
-    <div className="relative w-full max-w-2xl">
-      <div className="relative flex items-center">
-        <Search className="absolute left-4 h-5 w-5 text-muted-foreground" />
+    <div className="relative w-full max-w-2xl px-4 md:px-0">
+      <div className="relative flex items-center group">
+        <div className="absolute left-4 flex items-center justify-center">
+            {Icon}
+        </div>
         <Input
           value={query}
           onChange={handleChange}
           onKeyDown={handleKeyDown}
-          className="h-14 rounded-full border-muted-foreground/20 bg-card pl-12 pr-14 text-lg shadow-sm transition-all focus-visible:ring-primary/20"
+          // Generating text effect (shimmer) could be applied here if we had a separate element, 
+          // but for Input placeholder is standard. 
+          placeholder={isLoading ? "Generating..." : "Search anything..."}
+          className={cn(
+            "h-14 w-full rounded-full border-white/10 bg-[#0a0a0a] pl-12 pr-14 text-lg shadow-lg transition-all focus-visible:ring-1 focus-visible:ring-teal-400/50",
+            isLoading && "animate-shimmer bg-[linear-gradient(110deg,#0a0a0a,45%,#1a1a1a,55%,#0a0a0a)] bg-[length:200%_100%] text-white/50",
+            className
+          )}
+          disabled={isLoading}
           {...props}
         />
         <div className="absolute right-2 top-2">
           <Button
             size="icon"
-            className="h-10 w-10 rounded-full"
+            className={cn(
+                "h-10 w-10 rounded-full transition-all",
+                query.trim() ? "bg-teal-400 hover:bg-teal-500 text-black" : "bg-zinc-800 text-zinc-500"
+            )}
             disabled={!query.trim() || isLoading}
             onClick={handleButtonClick}
             type="button"

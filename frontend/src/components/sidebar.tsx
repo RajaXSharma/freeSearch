@@ -3,11 +3,11 @@
 import * as React from "react"
 import Link from "next/link"
 import { useRouter, usePathname } from "next/navigation"
-import { Plus, Settings, Menu, MessageSquare, Trash2 } from "lucide-react"
+import { Plus, Menu, MessageSquare, Trash2 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { Sheet, SheetContent, SheetTrigger, SheetTitle } from "@/components/ui/sheet"
-import { ThemeToggle } from "@/components/theme-toggle"
+
 import { cn } from "@/lib/utils"
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
 import { PanelLeft, PanelLeftClose } from "lucide-react"
@@ -114,23 +114,23 @@ export function Sidebar({ className }: SidebarProps) {
       {/* Desktop Sidebar */}
       <aside 
         className={cn(
-          "hidden h-full flex-col border-r bg-secondary/30 transition-[width] duration-300 md:flex", 
-          isCollapsed ? "w-[60px]" : "w-[260px]",
+          "hidden h-full flex-col border-r border-white/5 bg-[#0a0a0a] transition-[width] duration-300 md:flex", 
+          isCollapsed ? "w-[60px]" : "w-[260px]", // specific width 260px
           className
         )}
       >
         <div className="flex h-full flex-col">
            {/* Header & Toggle */}
-           <div className={cn("flex h-14 items-center", isCollapsed ? "justify-center" : "justify-between px-4")}>
+           <div className={cn("flex h-14 items-center border-b border-white/5", isCollapsed ? "justify-center" : "justify-between px-4")}>
              {!isCollapsed && (
-                <Link href="/" className="font-semibold text-lg flex items-center animate-in fade-in duration-300">
-                    <span className="text-primary mr-2">✦</span> FreeSearch
+                <Link href="/" className="font-serif font-medium text-lg flex items-center animate-in fade-in duration-300 tracking-tight">
+                    <span className="text-teal-400 mr-2 text-xl">✦</span> FreeSearch
                 </Link>
              )}
              <Button 
                 variant="ghost" 
                 size="icon" 
-                className="h-8 w-8" 
+                className="h-8 w-8 text-zinc-400 hover:text-white hover:bg-white/5" 
                 onClick={() => setIsCollapsed(!isCollapsed)}
              >
                 {isCollapsed ? <PanelLeft className="h-4 w-4" /> : <PanelLeftClose className="h-4 w-4" />}
@@ -161,7 +161,7 @@ export function Sidebar({ className }: SidebarProps) {
                 >
                   <Plus className="h-4 w-4" />
                   <span>New Thread</span>
-                  <span className="ml-auto text-xs text-muted-foreground border px-1.5 py-0.5 rounded">Ctrl I</span>
+
                 </Button>
              )}
            </div>
@@ -205,36 +205,10 @@ export function Sidebar({ className }: SidebarProps) {
            
            {isCollapsed && <div className="flex-1" />}
 
-           {/* Footer */}
-           <div className="mt-auto border-t p-4 flex flex-col gap-2">
-              <div className="flex items-center justify-between">
-                {isCollapsed ? (
-                     <Tooltip>
-                        <TooltipTrigger asChild>
-                            <Button variant="ghost" size="icon" className="mx-auto">
-                                <Settings className="h-4 w-4" />
-                            </Button>
-                        </TooltipTrigger>
-                        <TooltipContent side="right">Settings</TooltipContent>
-                    </Tooltip>
-                ) : (
-                    <Button variant="ghost" size="sm" className="w-full justify-start gap-2">
-                        <Settings className="h-4 w-4" />
-                        Settings
-                    </Button>
-                )}
-              </div>
-              
-              <div className={cn("flex items-center pt-2", isCollapsed ? "justify-center flex-col gap-4" : "justify-between")}>
-                  {!isCollapsed && (
-                     <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                         <div className="h-2 w-2 rounded-full bg-green-500"></div>
-                         Online
-                     </div>
-                  )}
-                  <ThemeToggle />
-              </div>
-           </div>
+            {/* Footer */}
+            <div className="mt-auto border-t p-4 flex flex-col gap-2">
+               {/* Footer content removed as per request */}
+            </div>
         </div>
         
         <AlertDialog open={!!chatToDelete} onOpenChange={(open: boolean) => !open && setChatToDelete(null)}>
@@ -288,7 +262,7 @@ function SidebarContent({ chats, onNewChat, onDelete }: SidebarContentProps) {
         >
           <Plus className="h-4 w-4" />
           <span>New Thread</span>
-          <span className="ml-auto text-xs text-muted-foreground border px-1.5 py-0.5 rounded">Ctrl I</span>
+
         </Button>
       </div>
 
@@ -328,19 +302,7 @@ function SidebarContent({ chats, onNewChat, onDelete }: SidebarContentProps) {
 
       {/* Footer */}
       <div className="mt-auto border-t p-4 flex flex-col gap-2">
-         <div className="flex items-center justify-between">
-            <Button variant="ghost" size="sm" className="w-full justify-start gap-2">
-                <Settings className="h-4 w-4" />
-                Settings
-            </Button>
-         </div>
-         <div className="flex items-center justify-between pt-2">
-             <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                 <div className="h-2 w-2 rounded-full bg-green-500"></div>
-                 Online
-             </div>
-             <ThemeToggle />
-         </div>
+         {/* Footer content removed as per request */}
       </div>
     </div>
   )
