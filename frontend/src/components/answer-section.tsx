@@ -65,7 +65,7 @@ export function AnswerSection({ content, isLoading, skipAnimation = false, ...pr
   }, [content, isLoading, skipAnimation])
 
   return (
-    <div className="prose prose-zinc dark:prose-invert max-w-none w-full">
+    <div className="prose prose-zinc dark:prose-invert max-w-none w-full text-[15px] leading-relaxed">
       {isLoading ? (
         <div className="space-y-4">
           <Skeleton className="h-4 w-full" />
@@ -76,14 +76,79 @@ export function AnswerSection({ content, isLoading, skipAnimation = false, ...pr
         <>
           <MemoizedReactMarkdown
             components={{
+              // Custom paragraph to handle bold headers with colons
+              p({ node, children, ...props }: any) {
+                return (
+                  <p className="my-4 leading-7" {...props}>
+                    {children}
+                  </p>
+                )
+              },
+              // Style bold text that looks like headers (ends with colon)
+              strong({ node, children, ...props }: any) {
+                const text = String(children)
+                // If bold text ends with ":" or "Testing" patterns, style as header
+                const isHeader = text.endsWith(':') || /Testing|Purpose|Summary|Overview|Example/i.test(text)
+                return isHeader ? (
+                  <strong className="block mt-6 mb-2 text-base font-semibold text-foreground" {...props}>
+                    {children}
+                  </strong>
+                ) : (
+                  <strong className="font-semibold" {...props}>
+                    {children}
+                  </strong>
+                )
+              },
+              // Better list styling
+              ul({ node, children, ...props }: any) {
+                return (
+                  <ul className="my-4 space-y-2 list-disc list-outside pl-5" {...props}>
+                    {children}
+                  </ul>
+                )
+              },
+              ol({ node, children, ...props }: any) {
+                return (
+                  <ol className="my-4 space-y-2 list-decimal list-outside pl-5" {...props}>
+                    {children}
+                  </ol>
+                )
+              },
+              li({ node, children, ...props }: any) {
+                return (
+                  <li className="leading-7" {...props}>
+                    {children}
+                  </li>
+                )
+              },
+              // Code blocks
               code({ node, inline, className, children, ...props }: any) {
                 const match = /language-(\w+)/.exec(className || "")
                 return !inline && match ? (
-                  <CodeBlock language={match[1]} value={String(children).replace(/\n$/, "")} /> 
+                  <CodeBlock language={match[1]} value={String(children).replace(/\n$/, "")} />
                 ) : (
-                  <code className={className} {...props}>
+                  <code className="bg-muted px-1.5 py-0.5 rounded text-sm font-medium" {...props}>
                     {children}
                   </code>
+                )
+              },
+              // Links with citation styling
+              a({ node, children, href, ...props }: any) {
+                // Style citation references like [1], [2]
+                const isCitation = /^\[\d+\]$/.test(String(children))
+                return (
+                  <a
+                    href={href}
+                    className={isCitation
+                      ? "text-primary font-medium no-underline hover:underline text-sm align-super"
+                      : "text-primary hover:underline"
+                    }
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    {...props}
+                  >
+                    {children}
+                  </a>
                 )
               },
             }}

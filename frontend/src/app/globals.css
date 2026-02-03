@@ -126,3 +126,116 @@
     @apply bg-background text-foreground;
   }
 }
+
+/* Custom prose styles for better readability like Perplexity */
+.prose {
+  --tw-prose-body: hsl(var(--foreground));
+  --tw-prose-headings: hsl(var(--foreground));
+  --tw-prose-bold: hsl(var(--foreground));
+  --tw-prose-links: hsl(var(--primary));
+
+  font-size: 1rem;
+  line-height: 1.8;
+  letter-spacing: 0.01em;
+}
+
+.prose p {
+  margin-top: 1.25em;
+  margin-bottom: 1.25em;
+}
+
+.prose p:first-child {
+  margin-top: 0;
+}
+
+.prose p:last-child {
+  margin-bottom: 0;
+}
+
+/* Style bold text as section headers */
+.prose strong {
+  font-weight: 600;
+  color: hsl(var(--foreground));
+}
+
+/* When bold text starts a paragraph or is followed by colon, style as header */
+.prose p > strong:first-child {
+  display: block;
+  margin-top: 1.5em;
+  margin-bottom: 0.5em;
+  font-size: 1.05em;
+}
+
+.prose p:first-child > strong:first-child {
+  margin-top: 0;
+}
+
+/* Better list styling */
+.prose ul,
+.prose ol {
+  margin-top: 1em;
+  margin-bottom: 1em;
+  padding-left: 1.5em;
+}
+
+.prose li {
+  margin-top: 0.5em;
+  margin-bottom: 0.5em;
+}
+
+.prose li > p {
+  margin-top: 0.5em;
+  margin-bottom: 0.5em;
+}
+
+/* Inline code styling */
+.prose code:not(pre code) {
+  background-color: hsl(var(--muted));
+  padding: 0.2em 0.4em;
+  border-radius: 0.25rem;
+  font-size: 0.9em;
+  font-weight: 500;
+}
+
+/* Blockquote styling */
+.prose blockquote {
+  border-left: 3px solid hsl(var(--primary));
+  padding-left: 1em;
+  margin-top: 1.5em;
+  margin-bottom: 1.5em;
+  font-style: normal;
+  color: hsl(var(--muted-foreground));
+}
+
+/* Citation references like [1], [2] */
+.prose a[href^="#"],
+.prose a:not([href]) {
+  color: hsl(var(--primary));
+  font-weight: 500;
+  text-decoration: none;
+}
+
+/* Horizontal rule */
+.prose hr {
+  margin-top: 2em;
+  margin-bottom: 2em;
+  border-color: hsl(var(--border));
+}
+
+/* Better heading styles if LLM outputs them */
+.prose h1,
+.prose h2,
+.prose h3,
+.prose h4 {
+  margin-top: 1.5em;
+  margin-bottom: 0.75em;
+  font-weight: 600;
+  line-height: 1.3;
+}
+
+.prose h1:first-child,
+.prose h2:first-child,
+.prose h3:first-child,
+.prose h4:first-child {
+  margin-top: 0;
+}

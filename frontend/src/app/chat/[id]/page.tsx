@@ -17,14 +17,17 @@ export default function ChatPage() {
   const router = useRouter()
   const chatId = params.id as string
 
-  const [currentSources, setCurrentSources] = React.useState<Source[]>([])
+  const [sourcesMap, setSourcesMap] = React.useState<Record<string, Source[]>>({})
+  const [currentSources, setCurrentSources] = React.useState<Source[]>([]) // For currently streaming message
+  const [selectedMessageId, setSelectedMessageId] = React.useState<string | null>(null)
   const [isInitialLoad, setIsInitialLoad] = React.useState(true)
   const [hasLoadedHistory, setHasLoadedHistory] = React.useState(false)
   const [hasSubmittedInitialQuery, setHasSubmittedInitialQuery] = React.useState(false)
   const [input, setInput] = React.useState("")
   const [historyMessageIds, setHistoryMessageIds] = React.useState<Set<string>>(new Set())
-  const [isRightSidebarOpen, setIsRightSidebarOpen] = React.useState(false) // State for right sidebar
+  const [isRightSidebarOpen, setIsRightSidebarOpen] = React.useState(false)
   const messagesEndRef = React.useRef<HTMLDivElement>(null)
+  const currentSourcesRef = React.useRef<Source[]>([]) // Ref to avoid closure issues in onFinish
 
  
   const {
@@ -42,7 +45,19 @@ export default function ChatPage() {
     // Handle custom data parts (sources) from the stream
     onData: (dataPart) => {
       if (dataPart.type === 'data-sources' && Array.isArray(dataPart.data)) {
-        setCurrentSources(dataPart.data as Source[])
+        const sources = dataPart.data as Source[]
+        currentSourcesRef.current = sources // Store in ref for onFinish
+        setCurrentSources(sources) // Update state for UI
+      }
+    },
+    onFinish: ({ message }) => {
+      // Store sources in sourcesMap but DON'T clear currentSources
+      // (currentSources will be cleared when a new query starts)
+      if (currentSourcesRef.current.length > 0 && message?.id) {
+        setSourcesMap(prev => ({
+          ...prev,
+          [message.id]: currentSourcesRef.current
+        }))
       }
     },
   })
@@ -73,6 +88,27 @@ export default function ChatPage() {
             // Track which messages came from history (skip animation for these)
             setHistoryMessageIds(new Set(formattedMessages.map(m => m.id)))
             setMessages(formattedMessages)
+
+            // Load sources for ALL assistant messages that have them
+            const newSourcesMap: Record<string, Source[]> = {}
+            data.messages.forEach((msg: { id: string; role: string; sources?: string }) => {
+              if (msg.role === "assistant" && msg.sources) {
+                try {
+                  const parsedSources = JSON.parse(msg.sources);
+                  if (Array.isArray(parsedSources) && parsedSources.length > 0) {
+                    newSourcesMap[msg.id] = parsedSources.map((s: { title?: string; url: string; content: string }, idx: number) => ({
+                      title: s.title || s.url,
+                      url: s.url,
+                      snippet: s.content,
+                      index: idx + 1,
+                    }));
+                  }
+                } catch (e) {
+                  console.error("Failed to parse sources for message:", msg.id, e);
+                }
+              }
+            })
+            setSourcesMap(newSourcesMap)
           }
         } else if (response.status === 404) {
           // Chat not found - redirect to home
@@ -102,8 +138,6 @@ export default function ChatPage() {
     
     if (initialQuery && messages.length === 0) {
       setHasSubmittedInitialQuery(true)
-      // Clear sources before new query
-      setCurrentSources([])
       sendMessage({ text: initialQuery })
     }
   }, [hasLoadedHistory, hasSubmittedInitialQuery, messages.length, sendMessage])
@@ -112,7 +146,9 @@ export default function ChatPage() {
   const handleFormSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault()
     if (input.trim() && !isLoading) {
-      setCurrentSources([]) // Clear sources for new query
+      // Clear sources for new query
+      setCurrentSources([])
+      currentSourcesRef.current = []
       sendMessage({ text: input })
       setInput("")
     }
@@ -121,7 +157,9 @@ export default function ChatPage() {
   // Handle search from SearchInput component
   const handleSearchInput = async (query: string) => {
     if (!query.trim() || isLoading) return
-    setCurrentSources([]) // Clear sources for new query
+    // Clear sources for new query
+    setCurrentSources([])
+    currentSourcesRef.current = []
     sendMessage({ text: query })
     setInput("") // Clear the input after sending
   }
@@ -140,6 +178,19 @@ export default function ChatPage() {
 
   const userMessages = messages.filter((m) => m.role === "user")
   const currentQuery = userMessages.length > 0 ? getMessageContent(userMessages[userMessages.length - 1]) : ""
+
+  // Helper to get sources for a message (checks both sourcesMap and currentSources for streaming)
+  const getSourcesForMessage = (messageId: string, isLastMessage: boolean): Source[] => {
+    // For the last message, prioritize currentSources (from streaming/recent)
+    if (isLastMessage && currentSources.length > 0) {
+      return currentSources
+    }
+    // For all messages, check sourcesMap (from history or onFinish)
+    if (sourcesMap[messageId]?.length > 0) {
+      return sourcesMap[messageId]
+    }
+    return []
+  }
 
   return (
     <div className="flex h-screen w-full overflow-hidden bg-[#0f0f0f] text-foreground font-sans selection:bg-teal-500/30">
@@ -213,18 +264,32 @@ export default function ChatPage() {
                         <h3 className="text-sm font-semibold mb-3 flex items-center gap-2">
                           <span className="text-lg">✤</span> Answer
                         </h3>
-                          <AnswerSection
-                            content={getMessageContent(message)}
-                            isLoading={isLoading && idx === messages.length - 1}
-                            skipAnimation={historyMessageIds.has(message.id)}
-                            onToggleSources={
-                              // Only show sources button for the last message if we have sources
-                              (idx === messages.length - 1 && currentSources.length > 0)
-                                ? () => setIsRightSidebarOpen(prev => !prev) 
-                                : undefined
-                            }
-                            sourceCount={idx === messages.length - 1 ? currentSources.length : 0}
-                          />
+                          {(() => {
+                            const isLastMessage = idx === messages.length - 1
+                            const messageSources = getSourcesForMessage(message.id, isLastMessage)
+                            return (
+                              <AnswerSection
+                                content={getMessageContent(message)}
+                                isLoading={isLoading && isLastMessage}
+                                skipAnimation={historyMessageIds.has(message.id)}
+                                onToggleSources={
+                                  messageSources.length > 0
+                                    ? () => {
+                                        // If clicking same message, toggle sidebar
+                                        // If clicking different message, open sidebar
+                                        if (selectedMessageId === message.id) {
+                                          setIsRightSidebarOpen(prev => !prev)
+                                        } else {
+                                          setSelectedMessageId(message.id)
+                                          setIsRightSidebarOpen(true)
+                                        }
+                                      }
+                                    : undefined
+                                }
+                                sourceCount={messageSources.length}
+                              />
+                            )
+                          })()}
                       </section>
                     </div>
                   )}
@@ -278,10 +343,14 @@ export default function ChatPage() {
       </main>
 
       {/* Source Citations Sidebar */}
-      <SourceCitations 
-        isOpen={isRightSidebarOpen} 
-        onClose={() => setIsRightSidebarOpen(false)} 
-        sources={currentSources}
+      <SourceCitations
+        isOpen={isRightSidebarOpen}
+        onClose={() => setIsRightSidebarOpen(false)}
+        sources={
+          selectedMessageId
+            ? (sourcesMap[selectedMessageId]?.length > 0 ? sourcesMap[selectedMessageId] : currentSources)
+            : []
+        }
       />
     </div>
   )
