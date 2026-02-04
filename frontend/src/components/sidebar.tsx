@@ -171,7 +171,7 @@ export function Sidebar({ className }: SidebarProps) {
                             key={chat.id}
                             variant="ghost"
                             asChild
-                            className="w-full grid grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-2 text-sm font-normal h-9 group overflow-hidden max-w-full"
+                            className="w-full grid grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-2 text-sm font-normal h-9 group overflow-hidden max-w-full hover:bg-transparent hover:ring-1 hover:ring-zinc-700 hover:text-zinc-100 transition-all"
                           >
                             <Link href={`/chat/${chat.id}`}>
                               <MessageSquare className="h-3 w-3 text-muted-foreground" />
@@ -255,7 +255,7 @@ function SidebarContent({ chats, onNewChat, onDelete }: SidebarContentProps) {
                   key={chat.id}
                   variant="ghost"
                   asChild
-                  className="w-full grid grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-2 text-sm font-normal h-9 group overflow-hidden max-w-full"
+                  className="w-full grid grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-2 text-sm font-normal h-9 group overflow-hidden max-w-full hover:bg-transparent hover:ring-1 hover:ring-zinc-700 hover:text-zinc-100 transition-all"
                 >
                   <Link href={`/chat/${chat.id}`}>
                     <MessageSquare className="h-3 w-3 text-muted-foreground" />
