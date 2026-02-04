@@ -24,8 +24,6 @@ export function SearchInput({
   ...props
 }: SearchInputProps) {
   const [internalQuery, setInternalQuery] = React.useState("")
-  
-  // Use controlled value if provided, otherwise use internal state
   const isControlled = controlledValue !== undefined
   const query = isControlled ? controlledValue : internalQuery
 
@@ -56,12 +54,9 @@ export function SearchInput({
     }
   }
 
-  // Determine which icon to show
   const Icon = isLoading ? (
-    // Simple spinner for loading state
     <div className="h-5 w-5 animate-spin rounded-full border-2 border-primary border-t-transparent" />
   ) : (
-    // Globe icon that rotates slowly (Insight Star concept with Globe)
     <Globe className="h-5 w-5 text-teal-400 animate-spin-slow" />
   )
 

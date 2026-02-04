@@ -15,8 +15,7 @@ export default function Page() {
 
     try {
       setIsCreatingChat(true)
-      
-      // Create a new chat
+
       const response = await fetch("/api/chats", {
         method: "POST",
       })
@@ -26,8 +25,6 @@ export default function Page() {
       }
 
       const chat = await response.json()
-      
-      // Navigate to the new chat page with the query in state
       router.push(`/chat/${chat.id}?q=${encodeURIComponent(query)}`)
     } catch (error) {
       console.error("Failed to create chat:", error)

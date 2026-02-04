@@ -10,12 +10,11 @@ import { Copy, Check } from "lucide-react"
 interface AnswerSectionProps {
   content: string
   isLoading: boolean
-  skipAnimation?: boolean // Skip typewriter effect for historical messages
+  skipAnimation?: boolean
   onToggleSources?: () => void
   sourceCount?: number
 }
 
-// Memoized Markdown component to prevent unnecessary re-renders
 const MemoizedReactMarkdown = React.memo(
   ReactMarkdown,
   (prevProps: any, nextProps: any) =>
@@ -27,9 +26,7 @@ export function AnswerSection({ content, isLoading, skipAnimation = false, ...pr
   const [displayedContent, setDisplayedContent] = React.useState(skipAnimation ? content : "")
   const [isDoneTyping, setIsDoneTyping] = React.useState(skipAnimation)
 
-  // Typewriter effect using requestAnimationFrame with batched updates
   React.useEffect(() => {
-    // Skip animation - show content immediately
     if (skipAnimation) {
       setDisplayedContent(content)
       setIsDoneTyping(true)
@@ -46,13 +43,12 @@ export function AnswerSection({ content, isLoading, skipAnimation = false, ...pr
     let currentIndex = 0
     let animationFrameId: number
     let lastTime = 0
-    const CHARS_PER_FRAME = 3 // Characters to add per animation frame
-    const FRAME_DELAY = 16 // ~60fps, update every 16ms
+    const CHARS_PER_FRAME = 3
+    const FRAME_DELAY = 16
 
     function animate(timestamp: number) {
       if (!mounted) return
 
-      // Throttle updates to FRAME_DELAY interval
       if (timestamp - lastTime >= FRAME_DELAY) {
         lastTime = timestamp
         currentIndex = Math.min(currentIndex + CHARS_PER_FRAME, content.length)
@@ -87,7 +83,6 @@ export function AnswerSection({ content, isLoading, skipAnimation = false, ...pr
         <>
           <MemoizedReactMarkdown
             components={{
-              // Custom paragraph to handle bold headers with colons
               p({ node, children, ...props }: any) {
                 return (
                   <p className="my-4 leading-7" {...props}>
@@ -95,7 +90,6 @@ export function AnswerSection({ content, isLoading, skipAnimation = false, ...pr
                   </p>
                 )
               },
-              // Style bold text
               strong({ node, children, ...props }: any) {
                 return (
                   <strong className="font-semibold" {...props}>
@@ -103,7 +97,6 @@ export function AnswerSection({ content, isLoading, skipAnimation = false, ...pr
                   </strong>
                 )
               },
-              // Better list styling
               ul({ node, children, ...props }: any) {
                 return (
                   <ul className="my-4 space-y-2 list-disc list-outside pl-5" {...props}>
@@ -125,7 +118,6 @@ export function AnswerSection({ content, isLoading, skipAnimation = false, ...pr
                   </li>
                 )
               },
-              // Code blocks
               code({ node, inline, className, children, ...props }: any) {
                 const match = /language-(\w+)/.exec(className || "")
                 return !inline && match ? (
@@ -136,9 +128,7 @@ export function AnswerSection({ content, isLoading, skipAnimation = false, ...pr
                   </code>
                 )
               },
-              // Links with citation styling
               a({ node, children, href, ...props }: any) {
-                // Style citation references like [1], [2]
                 const isCitation = /^\[\d+\]$/.test(String(children))
                 return (
                   <a
@@ -160,25 +150,21 @@ export function AnswerSection({ content, isLoading, skipAnimation = false, ...pr
             {displayedContent}
           </MemoizedReactMarkdown>
           
-          {isDoneTyping && (
+          {isDoneTyping && props.onToggleSources && (
             <div className="mt-4 flex items-center gap-2">
-                {/* Optional: Add other action buttons typically found in AI chats like copy, regenerate, etc. */}
-                {props.onToggleSources && (
-                    <Button 
-                        variant="outline" 
-                        size="sm" 
-                        className="rounded-full gap-2 text-xs h-8"
-                        onClick={props.onToggleSources}
-                    >
-                        <div className="flex -space-x-2 mr-0.5">
-                           {/* Small visual indication of sources being stacked */}
-                           <div className="w-2 h-2 rounded-full bg-current opacity-60" />
-                           <div className="w-2 h-2 rounded-full bg-current opacity-80" />
-                           <div className="w-2 h-2 rounded-full bg-current" />
-                        </div>
-                        View Sources {props.sourceCount ? `(${props.sourceCount})` : ''}
-                    </Button>
-                )}
+                <Button
+                    variant="outline"
+                    size="sm"
+                    className="rounded-full gap-2 text-xs h-8"
+                    onClick={props.onToggleSources}
+                >
+                    <div className="flex -space-x-2 mr-0.5">
+                       <div className="w-2 h-2 rounded-full bg-current opacity-60" />
+                       <div className="w-2 h-2 rounded-full bg-current opacity-80" />
+                       <div className="w-2 h-2 rounded-full bg-current" />
+                    </div>
+                    View Sources {props.sourceCount ? `(${props.sourceCount})` : ''}
+                </Button>
             </div>
           )}
         </>
@@ -187,14 +173,13 @@ export function AnswerSection({ content, isLoading, skipAnimation = false, ...pr
   )
 }
 
-// Singleton highlighter instance to prevent re-creation
 let highlighterPromise: Promise<any> | null = null;
 
 async function getHighlighter() {
   if (!highlighterPromise) {
     highlighterPromise = createHighlighter({
       themes: ["github-dark", "github-light"],
-      langs: ["typescript", "javascript", "tsx", "jsx", "json", "html", "css", "bash", "python", "markdown"], // Preload common langs
+      langs: ["typescript", "javascript", "tsx", "jsx", "json", "html", "css", "bash", "python", "markdown"],
     });
   }
   return highlighterPromise;
@@ -204,33 +189,29 @@ const CodeBlock = React.memo(function CodeBlock({ language, value }: { language:
   const [html, setHtml] = React.useState<string>("")
   const [copied, setCopied] = React.useState(false)
 
-  // Explicitly track if we are mounted to avoid state updates on unmount
   React.useEffect(() => {
     let mounted = true
     async function highlight() {
       try {
         const highlighter = await getHighlighter()
-        
-        // Load language if not pre-loaded
+
         if (!highlighter.getLoadedLanguages().includes(language)) {
-             try {
-                await highlighter.loadLanguage(language)
-             } catch (e) {
-                return
-             }
+          try {
+            await highlighter.loadLanguage(language)
+          } catch (e) {
+            return
+          }
         }
 
         const generatedHtml = highlighter.codeToHtml(value, {
           lang: language,
           theme: "github-dark",
         })
-        
+
         if (mounted) {
-            setHtml(generatedHtml)
+          setHtml(generatedHtml)
         }
-      } catch (e) {
-         // Silently fail
-      }
+      } catch (e) {}
     }
     highlight()
     return () => { mounted = false }
@@ -242,7 +223,6 @@ const CodeBlock = React.memo(function CodeBlock({ language, value }: { language:
     setTimeout(() => setCopied(false), 2000)
   }
 
-  // Common Header to prevent layout shift
   const Header = (
     <div className="flex items-center justify-between px-4 py-2 border-b border-zinc-800 bg-zinc-900/50 rounded-t-lg">
         <span className="text-xs text-zinc-400">{language}</span>

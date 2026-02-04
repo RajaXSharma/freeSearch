@@ -11,13 +11,11 @@ import { createUIMessageStream, createUIMessageStreamResponse } from "ai";
 import { HumanMessage, AIMessage, SystemMessage } from "@langchain/core/messages";
 import { type BaseMessage } from "@langchain/core/messages";
 
-/** Type for custom sources data part sent to the client */
 type SourcesDataPart = {
   type: "data-sources";
   data: Array<{ title: string; url: string; snippet: string; index: number }>;
 };
 
-/** Extract text content from a UIMessage */
 function extractTextFromMessage(message: any): string {
   if (message.parts && Array.isArray(message.parts)) {
     const textParts = message.parts.filter((part: any) => part.type === "text");
@@ -31,7 +29,6 @@ function extractTextFromMessage(message: any): string {
   return "";
 }
 
-/** Convert UI messages to LangChain message objects */
 function toLangChainMessages(messages: any[]): BaseMessage[] {
   return messages.map((msg) => {
     const content = extractTextFromMessage(msg);
@@ -43,18 +40,14 @@ function toLangChainMessages(messages: any[]): BaseMessage[] {
   });
 }
 
-/** Build conversation history for classifier (limited to last 4 messages) */
 function buildConversationHistory(messages: any[]): Array<[string, string]> {
-  // Only last 4 messages for query rewriting context
   return messages.slice(-4).map((msg: any) => {
     const content = extractTextFromMessage(msg);
-    // Truncate long messages for classifier
     const truncated = content.length > 300 ? content.substring(0, 297) + "..." : content;
     return [msg.role === "user" ? "human" : "assistant", truncated] as [string, string];
   });
 }
 
-/** Format search results for LLM context */
 function formatSearchResultsForLLM(sources: SearchResult[]): string {
   return sources
     .map((r, i) => `[${i + 1}] ${r.title}\nURL: ${r.url}\n${r.content}`)
@@ -69,7 +62,6 @@ export async function POST(request: Request) {
       return new Response("Messages are required", { status: 400 });
     }
 
-    // Get the latest user message
     const lastMessage = messages[messages.length - 1];
 
     if (lastMessage.role !== "user") {
@@ -83,31 +75,20 @@ export async function POST(request: Request) {
       return new Response("Message content is empty", { status: 400 });
     }
 
-    // =========================================================================
-    // Step 1: Fast Heuristic Classification (No LLM)
-    // =========================================================================
     const heuristicDecision = classifyQueryHeuristic(userQuery);
     console.log(`[Optimize] Heuristic decision: ${heuristicDecision}`);
 
-    // Build conversation history (excluding current message)
     const conversationHistory = buildConversationHistory(messages.slice(0, -1));
     const hasHistory = conversationHistory.length > 0;
 
-    // =========================================================================
-    // Step 2: Determine if Search is Needed
-    // =========================================================================
     let needsSearch = false;
     let searchQuery = userQuery;
 
     if (heuristicDecision === "NO_SEARCH") {
-      // Fast path: skip search entirely
       needsSearch = false;
       console.log("[Optimize] Fast path: NO_SEARCH (heuristic)");
     } else if (heuristicDecision === "SEARCH") {
-      // Fast path: search is definitely needed
       needsSearch = true;
-
-      // If there's history, we need to rewrite the query for context
       if (hasHistory) {
         console.log("[Optimize] SEARCH with history - rewriting query");
         const result = await classifyAndRewrite(conversationHistory, userQuery);
@@ -115,7 +96,6 @@ export async function POST(request: Request) {
       }
       console.log(`[Optimize] Fast path: SEARCH, query: "${searchQuery}"`);
     } else {
-      // AMBIGUOUS: use LLM classifier to decide
       console.log("[Optimize] Ambiguous - calling LLM classifier");
       const result = await classifyAndRewrite(conversationHistory, userQuery);
       needsSearch = result.decision === "SEARCH";
@@ -123,16 +103,10 @@ export async function POST(request: Request) {
       console.log(`[Optimize] LLM decision: ${result.decision}, query: "${searchQuery}"`);
     }
 
-    // =========================================================================
-    // Step 3: Execute Search if Needed (parallel with DB save)
-    // =========================================================================
     let collectedSources: SearchResult[] = [];
 
-    // Run search and DB save in parallel
     const [sources, _] = await Promise.all([
-      // Search if needed
       needsSearch ? getSearchResultsStructured(searchQuery) : Promise.resolve([]),
-      // Save user message to database
       chatId
         ? db.message.create({
             data: {
@@ -147,7 +121,6 @@ export async function POST(request: Request) {
     collectedSources = sources;
     console.log(`[Optimize] Search results: ${collectedSources.length} sources`);
 
-    // Update chat title if first message (fire-and-forget)
     if (chatId) {
       db.chat
         .findUnique({
@@ -175,23 +148,18 @@ export async function POST(request: Request) {
         );
     }
 
-    // =========================================================================
-    // Step 4: Build Messages and Stream Response (with sliding window)
-    // =========================================================================
-    const MAX_HISTORY_MESSAGES = 6; // Keep last 6 messages (3 turns)
+    const MAX_HISTORY_MESSAGES = 6;
     const recentMessages = messages.slice(0, -1).slice(-MAX_HISTORY_MESSAGES);
     const previousMessages = toLangChainMessages(recentMessages);
     const hasSearchResults = collectedSources.length > 0;
 
     console.log(`[Context] Using ${recentMessages.length}/${messages.length - 1} history messages`);
 
-    // Build final messages for LLM
     const langChainMessages: BaseMessage[] = [
       new SystemMessage(getSystemPromptWithSources(hasSearchResults)),
       ...previousMessages,
     ];
 
-    // If we have search results, add them before the user query
     if (hasSearchResults) {
       const searchContext = formatSearchResultsForLLM(collectedSources);
       langChainMessages.push(
@@ -201,14 +169,11 @@ export async function POST(request: Request) {
       langChainMessages.push(new HumanMessage(userQuery));
     }
 
-    // Capture for closure
     const capturedSources = collectedSources;
     const capturedChatId = chatId;
 
-    // Stream the response
     const stream = createUIMessageStream({
       execute: async ({ writer }) => {
-        // Send sources first if we have any
         if (capturedSources.length > 0) {
           const sourcesDataPart: SourcesDataPart = {
             type: "data-sources",
@@ -222,7 +187,6 @@ export async function POST(request: Request) {
           writer.write(sourcesDataPart);
         }
 
-        // Stream LLM response
         console.log("[Optimize] Streaming LLM response");
         const langchainStream = await chatModel.stream(langChainMessages);
 

@@ -2,22 +2,13 @@ import { ChatOpenAI } from "@langchain/openai";
 
 const LLAMA_API_URL = process.env.LLAMA_API_URL || "http://localhost:8080/v1";
 
-// Types
-
 export type SearchDecision = 'SEARCH' | 'NO_SEARCH' | 'AMBIGUOUS';
 
 export interface ClassificationResult {
   decision: SearchDecision;
-  query: string; // Original or rewritten query
+  query: string;
 }
 
-
-// Models
-
-
-/**
- * Main chat model for streaming responses
- */
 export const chatModel = new ChatOpenAI({
   apiKey: "not-needed",
   configuration: {
@@ -28,9 +19,6 @@ export const chatModel = new ChatOpenAI({
   streaming: true,
 });
 
-/**
- * Ultra-fast model for classification (minimal tokens)
- */
 const classifierModel = new ChatOpenAI({
   apiKey: "not-needed",
   configuration: {
@@ -43,17 +31,9 @@ const classifierModel = new ChatOpenAI({
   timeout: 8000,
 });
 
-
-// Heuristic Classification (No LLM - Instant)
-
-/**
- * Fast pattern-based classification (no LLM call)
- * Returns SEARCH, NO_SEARCH, or AMBIGUOUS
- */
 export function classifyQueryHeuristic(query: string): SearchDecision {
   const q = query.toLowerCase().trim();
 
-  // NO_SEARCH patterns - greetings, meta questions, simple math
   const noSearchPatterns = [
     /^(hi|hello|hey|greetings|good\s*(morning|afternoon|evening))[\s!.,?]*$/i,
     /^(thanks|thank\s*you|thx|ty)[\s!.,?]*$/i,
@@ -62,7 +42,7 @@ export function classifyQueryHeuristic(query: string): SearchDecision {
     /^who\s*are\s*you/i,
     /^how\s*are\s*you/i,
     /^help\s*$/i,
-    /^\d+\s*[\+\-\*\/\%\^]\s*\d+/, // Math: "5 + 3"
+    /^\d+\s*[\+\-\*\/\%\^]\s*\d+/,
     /^(calculate|compute|solve)\s+\d/i,
   ];
 
@@ -70,7 +50,6 @@ export function classifyQueryHeuristic(query: string): SearchDecision {
     if (pattern.test(q)) return 'NO_SEARCH';
   }
 
-  // SEARCH patterns - factual queries that need web search
   const searchPatterns = [
     /^(who|what|when|where|why|how)\s+(is|are|was|were|did|does|do|will|would|can|could)\s/i,
     /\b(latest|recent|current|today|yesterday|now|this\s*(week|month|year))\b/i,
@@ -79,7 +58,7 @@ export function classifyQueryHeuristic(query: string): SearchDecision {
     /\b(born|died|age|height|net\s*worth|salary)\b/i,
     /\b(how\s+to|tutorial|guide|steps|install)\b/i,
     /\b(best|top|review|comparison|vs|versus)\b/i,
-    /\b(20\d{2})\b/, // Years like 2024, 2025, 2026
+    /\b(20\d{2})\b/,
     /\b(president|ceo|founder|minister|leader)\b/i,
     /\b(population|capital|currency|country)\b/i,
   ];
@@ -88,7 +67,6 @@ export function classifyQueryHeuristic(query: string): SearchDecision {
     if (pattern.test(q)) return 'SEARCH';
   }
 
-  // Check for proper nouns (capitalized words not at sentence start)
   const words = query.split(/\s+/);
   const hasProperNoun = words.slice(1).some(w => /^[A-Z][a-z]+/.test(w));
   if (hasProperNoun) return 'SEARCH';
@@ -96,10 +74,6 @@ export function classifyQueryHeuristic(query: string): SearchDecision {
   return 'AMBIGUOUS';
 }
 
-
-// Combined Classification + Query Rewriting (Single LLM Call)
-
-// Insert current date dynamically
 const CURRENT_DATE = new Date().toLocaleDateString('en-US', {
   weekday: 'long', year: 'numeric', month: 'long', day: 'numeric'
 });
@@ -145,21 +119,14 @@ Query: "Hi there"
 Output: NO_SEARCH
 `;
 
-/**
- * Combined classifier and query rewriter (single LLM call for ambiguous cases)
- * @param conversationHistory - Previous messages as [role, content] tuples
- * @param currentQuery - The user's current query
- * @returns Classification result with decision and (possibly rewritten) query
- */
 export async function classifyAndRewrite(
   conversationHistory: Array<[string, string]>,
   currentQuery: string
 ): Promise<ClassificationResult> {
-  // Build context prompt
   let prompt = currentQuery;
   if (conversationHistory.length > 0) {
     const history = conversationHistory
-      .slice(-4) // Last 4 messages for context (keep it short)
+      .slice(-4)
       .map(([role, content]) => `${role === 'human' ? 'User' : 'Assistant'}: ${content.substring(0, 200)}`)
       .join('\n');
     prompt = `Context:\n${history}\n\nQuery: ${currentQuery}`;
@@ -177,15 +144,12 @@ export async function classifyAndRewrite(
 
     console.log('[Classifier] Raw response:', rawOutput.substring(0, 300));
 
-    // Try to extract answer - first outside think tags, then inside as fallback
     let output = rawOutput.replace(/<think>[\s\S]*?<\/think>/gi, '').trim();
 
-    // If empty after stripping, try to find SEARCH/NO_SEARCH inside think tags
     if (!output) {
       const thinkMatch = rawOutput.match(/<think>([\s\S]*?)<\/think>/i);
       if (thinkMatch) {
         const thinkContent = thinkMatch[1];
-        // Look for the classification inside thinking
         const searchMatch = thinkContent.match(/SEARCH:\s*(.+)/i);
         const noSearchMatch = thinkContent.match(/NO_SEARCH/i);
         if (searchMatch) {
@@ -198,7 +162,6 @@ export async function classifyAndRewrite(
 
     console.log('[Classifier] Parsed output:', output);
 
-    // Parse response
     if (output.toUpperCase().startsWith('SEARCH:')) {
       const rewritten = output.slice(7).trim() || currentQuery;
       console.log('[Classifier] Decision: SEARCH, Query:', rewritten);
@@ -210,7 +173,6 @@ export async function classifyAndRewrite(
       return { decision: 'NO_SEARCH', query: currentQuery };
     }
 
-    // Fallback: assume search needed for safety (better to search than miss info)
     console.log('[Classifier] Fallback: SEARCH (unparseable output)');
     return { decision: 'SEARCH', query: currentQuery };
   } catch (error) {
@@ -219,10 +181,6 @@ export async function classifyAndRewrite(
   }
 }
 
-
-/**
- * System prompt with search context
- */
 export function getSystemPromptWithSources(hasSearchResults: boolean): string {
   if (hasSearchResults) {
     return `You are a knowledgeable AI research assistant. Your goal is to answer the user's question using the provided Search Results.

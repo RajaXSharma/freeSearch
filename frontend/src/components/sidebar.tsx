@@ -37,7 +37,6 @@ export function Sidebar({ className }: SidebarProps) {
   const router = useRouter()
   const pathname = usePathname()
 
-  // Fetch chat history on mount and when pathname changes (navigating between chats)
   React.useEffect(() => {
     async function fetchChats() {
       try {
@@ -55,8 +54,6 @@ export function Sidebar({ className }: SidebarProps) {
   }, [pathname])
 
   const handleNewChat = () => {
-    // Navigate to home page for a fresh chat experience
-    // Chat will be created when user submits their first message
     router.push("/")
   }
 
@@ -70,7 +67,6 @@ export function Sidebar({ className }: SidebarProps) {
       const response = await fetch(`/api/chats/${chatToDelete}`, { method: "DELETE" })
       if (response.ok) {
         setChats((prev) => prev.filter((c) => c.id !== chatToDelete))
-        // Redirect to home if the deleted chat is currently being viewed
         if (pathname === `/chat/${chatToDelete}`) {
           router.push("/")
         }
@@ -90,7 +86,6 @@ export function Sidebar({ className }: SidebarProps) {
 
   return (
     <TooltipProvider delayDuration={0}>
-      {/* Mobile Sidebar */}
       <Sheet>
         <SheetTrigger asChild>
           <Button variant="outline" size="icon" className="fixed left-4 top-4 z-40 md:hidden">
@@ -107,40 +102,37 @@ export function Sidebar({ className }: SidebarProps) {
         </SheetContent>
       </Sheet>
 
-      {/* Desktop Sidebar */}
-      <aside 
+      <aside
         className={cn(
-          "hidden h-full flex-col border-r border-white/5 bg-[#0a0a0a] transition-[width] duration-300 md:flex", 
-          isCollapsed ? "w-[60px]" : "w-[260px]", // specific width 260px
+          "hidden h-full flex-col border-r border-white/5 bg-[#0a0a0a] transition-[width] duration-300 md:flex",
+          isCollapsed ? "w-[60px]" : "w-[260px]",
           className
         )}
       >
         <div className="flex h-full flex-col">
-           {/* Header & Toggle */}
            <div className={cn("flex h-14 items-center border-b border-white/5", isCollapsed ? "justify-center" : "justify-between px-4")}>
              {!isCollapsed && (
                 <Link href="/" className="font-serif font-medium text-lg flex items-center animate-in fade-in duration-300 tracking-tight">
                     <span className="text-teal-400 mr-2 text-xl">✦</span> FreeSearch
                 </Link>
              )}
-             <Button 
-                variant="ghost" 
-                size="icon" 
-                className="h-8 w-8 text-zinc-400 hover:text-white hover:bg-white/5" 
+             <Button
+                variant="ghost"
+                size="icon"
+                className="h-8 w-8 text-zinc-400 hover:text-white hover:bg-white/5"
                 onClick={() => setIsCollapsed(!isCollapsed)}
              >
                 {isCollapsed ? <PanelLeft className="h-4 w-4" /> : <PanelLeftClose className="h-4 w-4" />}
              </Button>
            </div>
 
-           {/* New Chat */}
            <div className={cn("p-4", isCollapsed && "px-2 py-4 flex justify-center")}>
              {isCollapsed ? (
                 <Tooltip>
                     <TooltipTrigger asChild>
-                        <Button 
-                          variant="outline" 
-                          size="icon" 
+                        <Button
+                          variant="outline"
+                          size="icon"
                           className="h-10 w-10 rounded-full shadow-sm hover:shadow-md"
                           onClick={handleNewChat}
                         >
@@ -150,19 +142,17 @@ export function Sidebar({ className }: SidebarProps) {
                     <TooltipContent side="right">New Thread</TooltipContent>
                 </Tooltip>
              ) : (
-                <Button 
-                  variant="outline" 
+                <Button
+                  variant="outline"
                   className="w-full justify-start gap-2 rounded-full py-6 shadow-sm hover:shadow-md transition-all"
                   onClick={handleNewChat}
                 >
                   <Plus className="h-4 w-4" />
                   <span>New Thread</span>
-
                 </Button>
              )}
            </div>
 
-           {/* History / Library */}
            {!isCollapsed && (
              <div className="flex-1 overflow-hidden py-2 animate-in fade-in duration-300">
                <div className="px-4 text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-2">
@@ -201,10 +191,7 @@ export function Sidebar({ className }: SidebarProps) {
            
            {isCollapsed && <div className="flex-1" />}
 
-            {/* Footer */}
-            <div className="mt-auto border-t p-4 flex flex-col gap-2">
-               {/* Footer content removed as per request */}
-            </div>
+            <div className="mt-auto border-t p-4 flex flex-col gap-2" />
         </div>
         
         <AlertDialog open={!!chatToDelete} onOpenChange={(open: boolean) => !open && setChatToDelete(null)}>
@@ -232,37 +219,26 @@ interface SidebarContentProps {
   onDelete: (chatId: string, e: React.MouseEvent) => void
 }
 
-// Note: SidebarContent is for mobile view, passing props down.
-// Since AlertDialog needs state, we might need to lift state or duplicate it.
-// For simplicity in this refactor, I'll keep SidebarContent mostly purely presentational
-// but properly wiring the delete action requires the parent to handle it if we want one dialog.
-// However, SidebarContent is rendered inside a specific SheetContent.
-// Let's pass the onDelete handler which is now openDeleteDialog.
-
 function SidebarContent({ chats, onNewChat, onDelete }: SidebarContentProps) {
   return (
     <div className="flex h-full flex-col">
-      {/* Header */}
       <div className="flex h-14 items-center px-4 font-semibold text-lg">
         <Link href="/" className="flex items-center">
           <span className="text-primary mr-2">✦</span> FreeSearch
         </Link>
       </div>
 
-      {/* New Chat */}
       <div className="p-4">
-        <Button 
-          variant="outline" 
+        <Button
+          variant="outline"
           className="w-full justify-start gap-2 rounded-full py-6 shadow-sm hover:shadow-md transition-all"
           onClick={onNewChat}
         >
           <Plus className="h-4 w-4" />
           <span>New Thread</span>
-
         </Button>
       </div>
 
-      {/* History */}
       <div className="flex-1 overflow-hidden py-2">
         <div className="px-4 text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-2">
           Library
@@ -284,7 +260,7 @@ function SidebarContent({ chats, onNewChat, onDelete }: SidebarContentProps) {
                   <Link href={`/chat/${chat.id}`}>
                     <MessageSquare className="h-3 w-3 text-muted-foreground" />
                     <span className="truncate text-left">{chat.title}</span>
-                    <Trash2 
+                    <Trash2
                       className="h-3 w-3 text-muted-foreground hover:text-destructive transition-colors z-10 opacity-0 group-hover:opacity-100"
                       onClick={(e) => onDelete(chat.id, e)}
                     />
@@ -296,10 +272,7 @@ function SidebarContent({ chats, onNewChat, onDelete }: SidebarContentProps) {
         </ScrollArea>
       </div>
 
-      {/* Footer */}
-      <div className="mt-auto border-t p-4 flex flex-col gap-2">
-         {/* Footer content removed as per request */}
-      </div>
+      <div className="mt-auto border-t p-4 flex flex-col gap-2" />
     </div>
   )
 }

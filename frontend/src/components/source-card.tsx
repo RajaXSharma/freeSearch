@@ -12,7 +12,6 @@ interface SourceCardProps {
 }
 
 export function SourceCard({ source }: SourceCardProps) {
-  // Safely parse domain from URL
   let domain = ""
   let faviconUrl = ""
   try {
@@ -21,27 +20,22 @@ export function SourceCard({ source }: SourceCardProps) {
       domain = urlObj.hostname.replace(/^www\./, "")
       faviconUrl = `https://www.google.com/s2/favicons?domain=${urlObj.hostname}&sz=32`
     }
-  } catch {
-    // Invalid URL, keep defaults
-  }
+  } catch {}
 
   const hasValidUrl = source.url && domain
 
   const content = (
     <div className="flex h-full flex-col gap-2 rounded-lg border bg-card p-3 transition-colors hover:bg-secondary/50">
-      {/* Title */}
       <div className="text-sm font-medium line-clamp-2 leading-tight">
         {source.title || "Untitled"}
       </div>
 
-      {/* Snippet */}
       {source.snippet && (
         <p className="text-xs text-muted-foreground line-clamp-2 flex-1">
           {source.snippet}
         </p>
       )}
 
-      {/* Footer with index and domain */}
       <div className="flex items-center gap-2 mt-auto pt-1">
         <div className="flex h-5 w-5 items-center justify-center rounded-full bg-primary/10 text-[10px] font-medium text-primary">
           {source.index}

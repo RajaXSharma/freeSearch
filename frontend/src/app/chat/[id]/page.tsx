@@ -18,7 +18,7 @@ export default function ChatPage() {
   const chatId = params.id as string
 
   const [sourcesMap, setSourcesMap] = React.useState<Record<string, Source[]>>({})
-  const [currentSources, setCurrentSources] = React.useState<Source[]>([]) // For currently streaming message
+  const [currentSources, setCurrentSources] = React.useState<Source[]>([])
   const [selectedMessageId, setSelectedMessageId] = React.useState<string | null>(null)
   const [isInitialLoad, setIsInitialLoad] = React.useState(true)
   const [hasLoadedHistory, setHasLoadedHistory] = React.useState(false)
@@ -27,7 +27,7 @@ export default function ChatPage() {
   const [historyMessageIds, setHistoryMessageIds] = React.useState<Set<string>>(new Set())
   const [isRightSidebarOpen, setIsRightSidebarOpen] = React.useState(false)
   const messagesEndRef = React.useRef<HTMLDivElement>(null)
-  const currentSourcesRef = React.useRef<Source[]>([]) // Ref to avoid closure issues in onFinish
+  const currentSourcesRef = React.useRef<Source[]>([])
 
  
   const {
@@ -43,17 +43,14 @@ export default function ChatPage() {
       api: "/api/chat",
       body: { chatId },
     }),
-    // Handle custom data parts (sources) from the stream
     onData: (dataPart) => {
       if (dataPart.type === 'data-sources' && Array.isArray(dataPart.data)) {
         const sources = dataPart.data as Source[]
-        currentSourcesRef.current = sources // Store in ref for onFinish
-        setCurrentSources(sources) // Update state for UI
+        currentSourcesRef.current = sources
+        setCurrentSources(sources)
       }
     },
     onFinish: ({ message }) => {
-      // Store sources in sourcesMap but DON'T clear currentSources
-      // (currentSources will be cleared when a new query starts)
       if (currentSourcesRef.current.length > 0 && message?.id) {
         setSourcesMap(prev => ({
           ...prev,
@@ -63,15 +60,12 @@ export default function ChatPage() {
     },
   })
 
-  // Derive loading state from status
   const isLoading = status === 'submitted' || status === 'streaming'
 
-  // Auto-scroll to bottom when new messages arrive
   React.useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" })
   }, [messages])
 
-  // Load existing chat messages on mount
   React.useEffect(() => {
     const loadChatHistory = async () => {
       try {
@@ -79,18 +73,15 @@ export default function ChatPage() {
         if (response.ok) {
           const data = await response.json()
           if (data.messages && data.messages.length > 0) {
-            // Convert DB messages to AI SDK UIMessage format
             const formattedMessages: UIMessage[] = data.messages.map((msg: { id: string; role: string; content: string }) => ({
               id: msg.id,
               role: msg.role as "user" | "assistant",
               content: msg.content,
               parts: [{ type: 'text' as const, text: msg.content }],
             }))
-            // Track which messages came from history (skip animation for these)
             setHistoryMessageIds(new Set(formattedMessages.map(m => m.id)))
             setMessages(formattedMessages)
 
-            // Load sources for ALL assistant messages that have them
             const newSourcesMap: Record<string, Source[]> = {}
             data.messages.forEach((msg: { id: string; role: string; sources?: string }) => {
               if (msg.role === "assistant" && msg.sources) {
@@ -112,7 +103,6 @@ export default function ChatPage() {
             setSourcesMap(newSourcesMap)
           }
         } else if (response.status === 404) {
-          // Chat not found - redirect to home
           console.warn("Chat not found, redirecting to home")
           router.push("/")
           return
@@ -130,7 +120,6 @@ export default function ChatPage() {
     }
   }, [chatId, setMessages, router])
 
-  // Handle initial query from URL after history is loaded
   React.useEffect(() => {
     if (!hasLoadedHistory || hasSubmittedInitialQuery) return
 
@@ -143,11 +132,9 @@ export default function ChatPage() {
     }
   }, [hasLoadedHistory, hasSubmittedInitialQuery, messages.length, sendMessage])
 
-  // Handle form submission
   const handleFormSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault()
     if (input.trim() && !isLoading) {
-      // Clear sources for new query
       setCurrentSources([])
       currentSourcesRef.current = []
       sendMessage({ text: input })
@@ -155,19 +142,15 @@ export default function ChatPage() {
     }
   }
 
-  // Handle search from SearchInput component
   const handleSearchInput = async (query: string) => {
     if (!query.trim() || isLoading) return
-    // Clear sources for new query
     setCurrentSources([])
     currentSourcesRef.current = []
     sendMessage({ text: query })
-    setInput("") // Clear the input after sending
+    setInput("")
   }
 
-  // Helper to extract text content from message
   const getMessageContent = (message: UIMessage): string => {
-    // AI SDK UIMessage uses parts array format
     if (message.parts && message.parts.length > 0) {
       return message.parts
         .filter((part): part is { type: 'text'; text: string } => part.type === 'text')
@@ -180,13 +163,10 @@ export default function ChatPage() {
   const userMessages = messages.filter((m) => m.role === "user")
   const currentQuery = userMessages.length > 0 ? getMessageContent(userMessages[userMessages.length - 1]) : ""
 
-  // Helper to get sources for a message (checks both sourcesMap and currentSources for streaming)
   const getSourcesForMessage = (messageId: string, isLastMessage: boolean): Source[] => {
-    // For the last message, prioritize currentSources (from streaming/recent)
     if (isLastMessage && currentSources.length > 0) {
       return currentSources
     }
-    // For all messages, check sourcesMap (from history or onFinish)
     if (sourcesMap[messageId]?.length > 0) {
       return sourcesMap[messageId]
     }
@@ -198,7 +178,6 @@ export default function ChatPage() {
       <Sidebar />
 
       <main className="flex-1 flex flex-col relative h-full overflow-hidden bg-[#0f0f0f]">
-        {/* Header */}
         <div className="border-b px-4 py-3 flex items-center gap-3">
           <Button
             variant="ghost"
@@ -213,7 +192,6 @@ export default function ChatPage() {
           </h1>
         </div>
 
-        {/* Messages */}
         <div className="flex-1 overflow-y-auto p-4 md:p-8 scroll-smooth">
           <div className="max-w-3xl mx-auto space-y-8">
             {isInitialLoad && messages.length === 0 ? (
@@ -254,13 +232,6 @@ export default function ChatPage() {
                     </div>
                   ) : (
                     <div className="space-y-6">
-                      {/* 
-                        For the most recent message, if we have sources, show the header but not the inline cards.
-                        The user can toggle them via the button in AnswerSection. 
-                        Actually, we can just hide the Sources section entirely here since it will be in the sidebar.
-                      */}
-
-                      {/* Answer */}
                       <section>
                         <h3 className="text-sm font-semibold mb-3 flex items-center gap-2">
                           <span className="text-lg">✤</span> Answer
@@ -296,7 +267,6 @@ export default function ChatPage() {
               ))
             )}
 
-            {/* Loading indicator for new response */}
             {isLoading && messages[messages.length - 1]?.role === "user" && (
               <div className="animate-in slide-in-from-bottom-4 duration-500">
                 <section>
@@ -308,22 +278,17 @@ export default function ChatPage() {
               </div>
             )}
 
-            {/* Error display */}
             {error && (
               <div className="text-red-500 text-center p-4 bg-red-50 dark:bg-red-900/20 rounded-lg">
                 Error: {error.message}
               </div>
             )}
 
-            {/* Scroll anchor */}
             <div ref={messagesEndRef} />
-
-            {/* Spacer for bottom search bar */}
             <div className="h-40 w-full" aria-hidden="true" />
           </div>
         </div>
 
-        {/* Sticky Bottom Search */}
         <div className="absolute bottom-4 left-0 right-0 p-4 flex justify-center z-10 pointer-events-none">
           <div className="w-full max-w-2xl pointer-events-auto">
             <form onSubmit={handleFormSubmit} className="relative">
@@ -341,7 +306,6 @@ export default function ChatPage() {
         </div>
       </main>
 
-      {/* Source Citations Sidebar */}
       <SourceCitations
         isOpen={isRightSidebarOpen}
         onClose={() => setIsRightSidebarOpen(false)}
