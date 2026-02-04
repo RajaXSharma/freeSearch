@@ -36,6 +36,7 @@ export default function ChatPage() {
     error,
     sendMessage,
     setMessages,
+    stop,
   } = useChat({
     id: chatId,
     transport: new DefaultChatTransport({
@@ -330,10 +331,10 @@ export default function ChatPage() {
                 value={input}
                 onChange={(e) => setInput(e.target.value)}
                 onSearch={handleSearchInput}
+                onStop={stop}
                 placeholder="Ask a follow up..."
                 className="shadow-2xl border-white/5 bg-[#0a0a0a]"
                 isLoading={isLoading}
-                disabled={isLoading}
               />
             </form>
           </div>

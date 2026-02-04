@@ -37,7 +37,7 @@ export function Sidebar({ className }: SidebarProps) {
   const router = useRouter()
   const pathname = usePathname()
 
-  // Fetch chat history
+  // Fetch chat history on mount and when pathname changes (navigating between chats)
   React.useEffect(() => {
     async function fetchChats() {
       try {
@@ -52,11 +52,7 @@ export function Sidebar({ className }: SidebarProps) {
     }
 
     fetchChats()
-    
-    // Refetch on route changes
-    const interval = setInterval(fetchChats, 5000)
-    return () => clearInterval(interval)
-  }, [])
+  }, [pathname])
 
   const handleNewChat = () => {
     // Navigate to home page for a fresh chat experience

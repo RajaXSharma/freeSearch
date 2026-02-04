@@ -1,25 +1,27 @@
 "use client"
 
 import * as React from "react"
-import { ArrowRight, Globe } from "lucide-react"
+import { ArrowRight, Globe, Square } from "lucide-react"
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
 import { cn } from "@/lib/utils"
 
 interface SearchInputProps extends Omit<React.InputHTMLAttributes<HTMLInputElement>, 'onChange'> {
   onSearch: (query: string) => void
+  onStop?: () => void
   isLoading?: boolean
   value?: string
   onChange?: (e: React.ChangeEvent<HTMLInputElement>) => void
 }
 
-export function SearchInput({ 
-  onSearch, 
-  isLoading, 
-  className, 
+export function SearchInput({
+  onSearch,
+  onStop,
+  isLoading,
+  className,
   value: controlledValue,
   onChange: controlledOnChange,
-  ...props 
+  ...props
 }: SearchInputProps) {
   const [internalQuery, setInternalQuery] = React.useState("")
   
@@ -37,7 +39,7 @@ export function SearchInput({
   }
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
-    if (e.key === "Enter" && query.trim()) {
+    if (e.key === "Enter" && query.trim() && !isLoading) {
       onSearch(query)
       if (!isControlled) {
         setInternalQuery("")
@@ -78,25 +80,34 @@ export function SearchInput({
           placeholder={isLoading ? "Generating..." : "Search anything..."}
           className={cn(
             "h-14 w-full rounded-full border-white/10 bg-[#0a0a0a] pl-12 pr-14 text-lg shadow-lg transition-all focus-visible:ring-1 focus-visible:ring-teal-400/50",
-            isLoading && "animate-shimmer bg-[linear-gradient(110deg,#0a0a0a,45%,#1a1a1a,55%,#0a0a0a)] bg-[length:200%_100%] text-white/50",
             className
           )}
-          disabled={isLoading}
           {...props}
         />
         <div className="absolute right-2 top-2">
-          <Button
-            size="icon"
-            className={cn(
+          {isLoading && onStop ? (
+            <Button
+              size="icon"
+              className="h-10 w-10 rounded-full bg-red-500/90 hover:bg-red-500 text-white transition-all"
+              onClick={onStop}
+              type="button"
+            >
+              <Square className="h-4 w-4 fill-current" />
+            </Button>
+          ) : (
+            <Button
+              size="icon"
+              className={cn(
                 "h-10 w-10 rounded-full transition-all",
                 query.trim() ? "bg-teal-400 hover:bg-teal-500 text-black" : "bg-zinc-800 text-zinc-500"
-            )}
-            disabled={!query.trim() || isLoading}
-            onClick={handleButtonClick}
-            type="button"
-          >
-            <ArrowRight className="h-4 w-4" />
-          </Button>
+              )}
+              disabled={!query.trim() || isLoading}
+              onClick={handleButtonClick}
+              type="button"
+            >
+              <ArrowRight className="h-4 w-4" />
+            </Button>
+          )}
         </div>
       </div>
     </div>
