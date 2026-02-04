@@ -99,25 +99,51 @@ export function classifyQueryHeuristic(query: string): SearchDecision {
 
 // Combined Classification + Query Rewriting (Single LLM Call)
 
+// Insert current date dynamically
+const CURRENT_DATE = new Date().toLocaleDateString('en-US', {
+  weekday: 'long', year: 'numeric', month: 'long', day: 'numeric'
+});
 
-const CLASSIFY_REWRITE_PROMPT = `/no_think
-Decide if query needs web search. If yes, rewrite it as an optimal search engine query.
+const CLASSIFY_REWRITE_PROMPT = `/no_think You are a query optimization AI. Your task is to decide if a user query requires a Google Search and, if so, rewrite it into the best possible keyword string.
 
-Output format (ONE line only):
-- SEARCH: <optimized search query>
-- NO_SEARCH
+Current Date: ${CURRENT_DATE}
 
-Rewriting rules for SEARCH:
-- Replace pronouns (his/her/he/she/it/they/this/that) with actual names from context
-- Make it keyword-focused and search-engine friendly
-- Remove filler words, keep essential terms
-- Add context from conversation if needed
+Input:
+1. Conversation History (for context)
+2. Current User Query
 
-Examples:
-Context: "User: who is Rohit Sharma" → Query: "what is his wife name" → SEARCH: Rohit Sharma wife name
-Context: "User: tell me about React" → Query: "how do I install it" → SEARCH: how to install React
-Query: "latest iPhone price" → SEARCH: iPhone 16 price 2024
-Query: "hello there" → NO_SEARCH`;
+Instructions:
+1. Analyze if the query needs external data (facts, news, prices, code docs, "who is").
+   - If it is conversational (hi, thanks, how are you), output NO_SEARCH.
+   - If it requires knowledge, output SEARCH.
+2. If SEARCH, rewrite the query:
+   - **Resolve Pronouns:** Replace "it", "he", "she", "that" with the specific entity from History.
+   - **Add Temporality:** If the user asks for "latest", "news", or "current", append the current year (${new Date().getFullYear()}).
+   - **Keyword Focus:** Remove filler words ("please tell me about", "I want to know"). Keep only search keywords.
+
+Output Format (Strictly one line):
+SEARCH: <optimized_query_string>
+OR
+NO_SEARCH
+
+### Examples:
+
+History: User: "Who is the CEO of Tesla?" Assistant: "Elon Musk."
+Query: "How old is he?"
+Output: SEARCH: Elon Musk age
+
+History: User: "I want to buy a phone." Assistant: "Which OS?"
+Query: "The latest iPhone."
+Output: SEARCH: iPhone 16 pro max price specs ${new Date().getFullYear()}
+
+History: None
+Query: "Python requests library tutorial"
+Output: SEARCH: python requests library tutorial
+
+History: None
+Query: "Hi there"
+Output: NO_SEARCH
+`;
 
 /**
  * Combined classifier and query rewriter (single LLM call for ambiguous cases)
@@ -193,44 +219,27 @@ export async function classifyAndRewrite(
   }
 }
 
-// System Prompt
-
-/**
- * System prompt for the search assistant (no tool mentions - we handle search externally)
- */
-export const SYSTEM_PROMPT = `You are a helpful AI search assistant.
-
-When search results are provided, use them to answer accurately and cite sources using [1], [2], etc.
-
-Rules:
-- Be concise and direct
-- Format responses in Markdown for readability
-- If search results are provided, base your answer on them and cite sources
-- If no search results are provided, answer from your knowledge or say you don't know
-- Never mention whether you searched or not - just answer naturally`;
 
 /**
  * System prompt with search context
  */
 export function getSystemPromptWithSources(hasSearchResults: boolean): string {
   if (hasSearchResults) {
-    return `You are a helpful AI search assistant.
+    return `You are a knowledgeable AI research assistant. Your goal is to answer the user's question using the provided Search Results.
 
-Search results have been provided below. Use them to answer the user's question accurately.
+Context:
+- Current Date: ${CURRENT_DATE}
+- Search Results are provided below in the format: [Source ID] Title: Snippet...
 
-Rules:
-- Cite sources using [1], [2], etc. based on the search result numbers
-- Be concise and direct
-- Format responses in Markdown
-- Base your answer on the provided search results
-- If the search results don't contain the answer, say so`;
+Instructions:
+1. **Synthesize, Don't List:** Do not just list the search results. Combine information from multiple sources to write a coherent, natural answer.
+2. **Cite Everything:** You MUST cite your sources using numbers in brackets like [1], [2]. Place the citation immediately after the fact it supports.
+   - Example: "Python 3.12 was released in late 2023 [1], introducing better error messages [3]."
+3. **Be Objective:** If sources disagree, mention the conflict.
+4. **Stay Grounded:** Answer ONLY based on the provided results. If the results do not contain the answer, state that you couldn't find the information.
+5. **Formatting:** Use Markdown (bolding key terms, lists) for readability.`;
   }
 
-  return `You are a helpful AI assistant.
-
-Rules:
-- Be concise and direct
-- Format responses in Markdown
-- Answer from your knowledge
-- If you're not sure about something, say so`;
+  return `You are a helpful AI assistant. Answer the user's question directly and concisely.
+Current Date: ${CURRENT_DATE}.`;
 }

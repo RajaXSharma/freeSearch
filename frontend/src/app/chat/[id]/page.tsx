@@ -275,8 +275,6 @@ export default function ChatPage() {
                                 onToggleSources={
                                   messageSources.length > 0
                                     ? () => {
-                                        // If clicking same message, toggle sidebar
-                                        // If clicking different message, open sidebar
                                         if (selectedMessageId === message.id) {
                                           setIsRightSidebarOpen(prev => !prev)
                                         } else {

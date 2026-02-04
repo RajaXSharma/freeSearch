@@ -27,9 +27,9 @@ export function AnswerSection({ content, isLoading, skipAnimation = false, ...pr
   const [displayedContent, setDisplayedContent] = React.useState(skipAnimation ? content : "")
   const [isDoneTyping, setIsDoneTyping] = React.useState(skipAnimation)
 
-  // Typewriter effect (only when not skipping animation)
+  // Typewriter effect using requestAnimationFrame with batched updates
   React.useEffect(() => {
-    // Skip animation - just show content immediately
+    // Skip animation - show content immediately
     if (skipAnimation) {
       setDisplayedContent(content)
       setIsDoneTyping(true)
@@ -43,24 +43,35 @@ export function AnswerSection({ content, isLoading, skipAnimation = false, ...pr
     }
 
     let mounted = true
-    let i = 0
-    const interval = setInterval(() => {
-      if (i < content.length) {
-        if (mounted) {
-          setDisplayedContent(content.slice(0, i + 1))
-        }
-        i++
-      } else {
-        clearInterval(interval)
-        if (mounted) {
+    let currentIndex = 0
+    let animationFrameId: number
+    let lastTime = 0
+    const CHARS_PER_FRAME = 3 // Characters to add per animation frame
+    const FRAME_DELAY = 16 // ~60fps, update every 16ms
+
+    function animate(timestamp: number) {
+      if (!mounted) return
+
+      // Throttle updates to FRAME_DELAY interval
+      if (timestamp - lastTime >= FRAME_DELAY) {
+        lastTime = timestamp
+        currentIndex = Math.min(currentIndex + CHARS_PER_FRAME, content.length)
+        setDisplayedContent(content.slice(0, currentIndex))
+
+        if (currentIndex >= content.length) {
           setIsDoneTyping(true)
+          return
         }
       }
-    }, 5) // Faster typing (5ms) to feel more responsive
+
+      animationFrameId = requestAnimationFrame(animate)
+    }
+
+    animationFrameId = requestAnimationFrame(animate)
 
     return () => {
       mounted = false
-      clearInterval(interval)
+      cancelAnimationFrame(animationFrameId)
     }
   }, [content, isLoading, skipAnimation])
 
@@ -84,16 +95,9 @@ export function AnswerSection({ content, isLoading, skipAnimation = false, ...pr
                   </p>
                 )
               },
-              // Style bold text that looks like headers (ends with colon)
+              // Style bold text
               strong({ node, children, ...props }: any) {
-                const text = String(children)
-                // If bold text ends with ":" or "Testing" patterns, style as header
-                const isHeader = text.endsWith(':') || /Testing|Purpose|Summary|Overview|Example/i.test(text)
-                return isHeader ? (
-                  <strong className="block mt-6 mb-2 text-base font-semibold text-foreground" {...props}>
-                    {children}
-                  </strong>
-                ) : (
+                return (
                   <strong className="font-semibold" {...props}>
                     {children}
                   </strong>
