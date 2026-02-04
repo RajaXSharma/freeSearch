@@ -1,0 +1,72 @@
+use_default_settings: true
+
+server:
+  # Keep your secret key
+  secret_key: "my_very_secret_key_12345"
+  limiter: false
+  image_proxy: true
+  # Binding to 0.0.0.0 is usually needed for Docker
+  bind_address: "0.0.0.0"
+
+search:
+  safe_search: 0
+  autocomplete: "duckduckgo"
+  formats:
+    - html
+    - json
+
+engines:
+
+  - name: brave
+    engine: brave
+    shortcut: br
+    disabled: false
+    weight: 2.0
+
+  - name: duckduckgo
+    engine: duckduckgo
+    shortcut: ddg
+    disabled: false
+    weight: 1.5
+
+  - name: wikipedia
+    engine: wikipedia
+    shortcut: wiki
+    disabled: false
+    weight: 1.5
+    categories: [general, learning]
+
+  # --- CODING & IT  ---
+
+  - name: stackoverflow
+    engine: stackoverflow
+    shortcut: so
+    disabled: false
+    categories: [it, dev]
+    weight: 2.0
+
+  - name: github
+    engine: github
+    shortcut: gh
+    disabled: false
+    categories: [it, dev]
+    weight: 1.5
+
+  - name: archlinux
+    engine: archlinux
+    shortcut: arch
+    disabled: false
+    categories: [it]
+
+  # HIGH RISK ENGINES (Disabled to prevent accidental use)
+  # Google/Bing aggressively block scrapers. Only enable if you have proxies.
+
+  - name: google
+    engine: google
+    shortcut: g
+    disabled: true
+
+  - name: bing
+    engine: bing
+    shortcut: b
+    disabled: true
