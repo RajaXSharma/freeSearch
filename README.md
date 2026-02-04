@@ -143,7 +143,7 @@ frontend/
 ### Recommended Models
 
 Any GGUF model compatible with llama.cpp works. Tested with:
-- Qwen3-4B (good balance of speed/quality)
+- [Qwen3-4B](https://huggingface.co/unsloth/Qwen3-4B-GGUF) (good balance of speed/quality)
 - Llama 3.2 3B
 
 ## Development
