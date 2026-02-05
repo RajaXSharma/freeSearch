@@ -1,0 +1,55 @@
+# Dependencies
+node_modules
+.pnp
+.pnp.js
+
+# Build outputs
+.next
+out
+build
+
+# Testing
+coverage
+
+# Environment files
+.env
+.env.local
+.env.*.local
+
+# IDE/Editor
+.vscode
+.idea
+*.swp
+*.swo
+
+# Git
+.git
+.gitignore
+
+# Debug logs
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Database
+*.db
+prisma/*.db
+
+# Generated files
+src/generated
+tsconfig.tsbuildinfo
+next-env.d.ts
+
+# Documentation
+*.md
+
+# Claude
+.claude
+CLAUDE.md
+
+# Misc
+*.log

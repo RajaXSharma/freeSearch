@@ -1,0 +1,114 @@
+services:
+  # --------------------------------------------------------------------------
+  # FREESEARCH - Main Next.js application
+  # --------------------------------------------------------------------------
+  freesearch:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: freesearch-app
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    environment:
+      - NODE_ENV=production
+      - SEARXNG_URL=http://searxng:8080
+      - LLAMA_API_URL=http://llama:8080/v1
+    volumes:
+      - freesearch-data:/app/prisma
+    depends_on:
+      - searxng
+      - llama
+    networks:
+      - freesearch-network
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://localhost:3000"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  # --------------------------------------------------------------------------
+  # SEARXNG - Meta search engine
+  # --------------------------------------------------------------------------
+  searxng:
+    image: searxng/searxng:latest
+    container_name: freesearch-searxng
+    restart: unless-stopped
+    ports:
+      - "8888:8080"
+    volumes:
+      - ./searxng/settings.yml:/etc/searxng/settings.yml:ro
+    environment:
+      - SEARXNG_BASE_URL=http://localhost:8888/
+    networks:
+      - freesearch-network
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://localhost:8080"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # --------------------------------------------------------------------------
+  # LLAMA.CPP - LLM inference server (GPU version)
+  # Requires: NVIDIA GPU + Container Toolkit
+  # For CPU-only, comment this and uncomment llama-cpu below
+  # --------------------------------------------------------------------------
+  llama:
+    image: ghcr.io/ggml-org/llama.cpp:server-cuda
+    container_name: freesearch-llama
+    restart: unless-stopped
+    ports:
+      - "8080:8080"
+    volumes:
+      - ./model:/models:ro
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+    # IMPORTANT: Change the model filename to match YOUR model
+    command: >
+      --model /models/Qwen3-4B-Q4_K_M.gguf
+      --host 0.0.0.0
+      --port 8080
+      --n-gpu-layers 99
+      --ctx-size 4096
+      --jinja
+    networks:
+      - freesearch-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 60s
+
+  # --------------------------------------------------------------------------
+  # LLAMA.CPP - CPU-only version (uncomment if no GPU)
+  # --------------------------------------------------------------------------
+  # llama:
+  #   image: ghcr.io/ggml-org/llama.cpp:server
+  #   container_name: freesearch-llama
+  #   restart: unless-stopped
+  #   ports:
+  #     - "8080:8080"
+  #   volumes:
+  #     - ./model:/models:ro
+  #   command: >
+  #     --model /models/Qwen3-4B-Q4_K_M.gguf
+  #     --host 0.0.0.0
+  #     --port 8080
+  #     --ctx-size 2048
+  #     --jinja
+  #   networks:
+  #     - freesearch-network
+
+volumes:
+  freesearch-data:
+
+networks:
+  freesearch-network:
+    driver: bridge

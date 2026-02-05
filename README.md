@@ -31,7 +31,92 @@ A privacy-focused, self-hosted AI search engine that combines web search with lo
 
 A CUDA-compatible NVIDIA GPU is recommended for optimal performance.
 
-## Prerequisites
+## Quick Start with Docker (Recommended)
+
+The easiest way to run FreeSearch is with Docker. It sets up everything automatically.
+
+### Prerequisites
+
+- [Docker Desktop](https://www.docker.com/products/docker-desktop/) installed
+- A GGUF model file (e.g., [Qwen3-4B](https://huggingface.co/unsloth/Qwen3-4B-GGUF))
+- **For GPU acceleration:**
+  - **Windows:** Automatic with Docker Desktop + WSL2 (just need updated NVIDIA drivers)
+  - **Linux:** Requires NVIDIA Container Toolkit (see below)
+  - **macOS:** Not supported, use CPU-only mode
+
+#### Linux GPU Setup (Ubuntu/Debian)
+
+```bash
+# Install prerequisites
+sudo apt-get update && sudo apt-get install -y --no-install-recommends \
+   curl \
+   gnupg2
+
+# Configure the repository
+curl -fsSL https://nvidia.github.io/libnvidia-container/gpgkey | sudo gpg --dearmor -o /usr/share/keyrings/nvidia-container-toolkit-keyring.gpg \
+  && curl -s -L https://nvidia.github.io/libnvidia-container/stable/deb/nvidia-container-toolkit.list | \
+    sed 's#deb https://#deb [signed-by=/usr/share/keyrings/nvidia-container-toolkit-keyring.gpg] https://#g' | \
+    sudo tee /etc/apt/sources.list.d/nvidia-container-toolkit.list
+
+# Update and install
+sudo apt-get update
+export NVIDIA_CONTAINER_TOOLKIT_VERSION=1.18.2-1
+  sudo apt-get install -y \
+      nvidia-container-toolkit=${NVIDIA_CONTAINER_TOOLKIT_VERSION} \
+      nvidia-container-toolkit-base=${NVIDIA_CONTAINER_TOOLKIT_VERSION} \
+      libnvidia-container-tools=${NVIDIA_CONTAINER_TOOLKIT_VERSION} \
+      libnvidia-container1=${NVIDIA_CONTAINER_TOOLKIT_VERSION}
+
+# Configure Docker runtime
+sudo nvidia-ctk runtime configure --runtime=docker
+
+# Restart Docker
+sudo systemctl restart docker
+```
+
+For other Linux distributions, see the [NVIDIA Container Toolkit Install Guide](https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/latest/install-guide.html).
+
+### Steps
+
+1. **Clone and add your model**
+   ```bash
+   git clone https://github.com/RajaXSharma/freeSearch.git
+   cd freesearch
+
+   # Download a model to the model/ folder
+   # Example: wget -P model/ https://huggingface.co/unsloth/Qwen3-4B-GGUF/resolve/main/Qwen3-4B-Q4_K_M.gguf
+   ```
+
+2. **Update model filename** (if different)
+
+   Edit `docker-compose.yml` line ~65 to match your model filename:
+   ```yaml
+   --model /models/YOUR-MODEL-NAME.gguf
+   ```
+
+3. **Start everything**
+   ```bash
+   docker compose up -d --build
+   ```
+
+4. **Open** [http://localhost:3000](http://localhost:3000)
+
+### Docker Commands
+
+```bash
+docker compose up -d --build   # Start all services
+docker compose logs -f         # View logs
+docker compose down            # Stop all services
+docker compose down -v         # Stop and delete data
+```
+
+---
+
+## Manual Installation
+
+If you prefer not to use Docker, follow the manual setup below.
+
+### Prerequisites
 
 You need two services running locally:
 
