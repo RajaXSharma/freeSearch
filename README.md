@@ -80,7 +80,7 @@ For other Linux distributions, see the [NVIDIA Container Toolkit Install Guide](
 
 1. **Clone and add your model**
    ```bash
-   git clone https://github.com/RajaXSharma/freeSearch.git
+   git clone https://github.com/somename/freeSearch.git
    cd freesearch
 
    # Download a model to the model/ folder
@@ -155,7 +155,7 @@ cmake --build build --config Release -j 8
 
 1. **Clone the repository**
    ```bash
-   git clone https://github.com/RajaXSharma/freeSearch.git
+   git clone https://github.com/somename/freeSearch.git
    cd freesearch/frontend
    ```
 

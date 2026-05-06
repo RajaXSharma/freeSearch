@@ -1,0 +1,13 @@
+# OpenWolf context
+.wolf/
+
+# Claude Code
+.claude/
+CLAUDE.md
+
+# Codex
+.codex
+
+
+PROJECT_EXPLANATION.md
+dockersetup.md

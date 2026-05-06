@@ -138,7 +138,7 @@ export async function classifyAndRewrite(
       ['human', prompt],
     ] as unknown as Parameters<typeof classifierModel.invoke>[0]);
 
-    let rawOutput = typeof response.content === 'string'
+    const rawOutput = typeof response.content === 'string'
       ? response.content
       : String(response.content);
 
@@ -183,7 +183,7 @@ export async function classifyAndRewrite(
 
 export function getSystemPromptWithSources(hasSearchResults: boolean): string {
   if (hasSearchResults) {
-    return `You are a knowledgeable AI research assistant. Your goal is to answer the user's question using the provided Search Results.
+    return `/no_think You are a knowledgeable AI research assistant. Your goal is to answer the user's question using the provided Search Results.
 
 Context:
 - Current Date: ${CURRENT_DATE}
@@ -198,6 +198,6 @@ Instructions:
 5. **Formatting:** Use Markdown (bolding key terms, lists) for readability.`;
   }
 
-  return `You are a helpful AI assistant. Answer the user's question directly and concisely.
+  return `/no_think You are a helpful AI assistant. Answer the user's question directly and concisely.
 Current Date: ${CURRENT_DATE}.`;
 }

@@ -6,11 +6,10 @@ import { useChat, type UIMessage } from "@ai-sdk/react"
 import { DefaultChatTransport } from "ai"
 import { Sidebar } from "@/components/sidebar"
 import { SearchInput } from "@/components/search-input"
-import { type Source } from "@/components/source-card"
+import { SourceCard, type Source } from "@/components/source-card"
 import { AnswerSection } from "@/components/answer-section"
-import { Button } from "@/components/ui/button"
 import { SourceCitations } from "@/components/source-citations"
-import { ArrowLeft, Loader2 } from "lucide-react"
+import { Loader2, BookOpen, AlignLeft } from "lucide-react"
 
 export default function ChatPage() {
   const params = useParams()
@@ -29,7 +28,7 @@ export default function ChatPage() {
   const messagesEndRef = React.useRef<HTMLDivElement>(null)
   const currentSourcesRef = React.useRef<Source[]>([])
 
- 
+
   const {
     messages,
     status,
@@ -125,7 +124,7 @@ export default function ChatPage() {
 
     const urlParams = new URLSearchParams(window.location.search)
     const initialQuery = urlParams.get('q')
-    
+
     if (initialQuery && messages.length === 0) {
       setHasSubmittedInitialQuery(true)
       sendMessage({ text: initialQuery })
@@ -160,9 +159,6 @@ export default function ChatPage() {
     return ''
   }
 
-  const userMessages = messages.filter((m) => m.role === "user")
-  const currentQuery = userMessages.length > 0 ? getMessageContent(userMessages[userMessages.length - 1]) : ""
-
   const getSourcesForMessage = (messageId: string, isLastMessage: boolean): Source[] => {
     if (isLastMessage && currentSources.length > 0) {
       return currentSources
@@ -174,104 +170,108 @@ export default function ChatPage() {
   }
 
   return (
-    <div className="flex h-screen w-full overflow-hidden bg-[#0f0f0f] text-foreground font-sans selection:bg-teal-500/30">
+    <div className="flex h-screen w-full overflow-hidden bg-background text-foreground">
       <Sidebar />
 
-      <main className="flex-1 flex flex-col relative h-full overflow-hidden bg-[#0f0f0f]">
-        <div className="border-b px-4 py-3 flex items-center gap-3">
-          <Button
-            variant="ghost"
-            size="icon"
-            onClick={() => router.push("/")}
-            className="h-8 w-8"
-          >
-            <ArrowLeft className="h-4 w-4" />
-          </Button>
-          <h1 className="text-lg font-medium truncate">
-            {currentQuery || "New Chat"}
-          </h1>
-        </div>
-
-        <div className="flex-1 overflow-y-auto p-4 md:p-8 scroll-smooth">
-          <div className="max-w-3xl mx-auto space-y-8">
+      <main className="flex-1 flex flex-col relative h-full overflow-hidden">
+        <div className="flex-1 overflow-y-auto">
+          <div className="max-w-[760px] mx-auto px-6 py-8 pb-40">
             {isInitialLoad && messages.length === 0 ? (
               <div className="flex items-center justify-center h-64">
                 <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
               </div>
             ) : messages.length === 0 ? (
               <div className="flex flex-col items-center justify-center h-64 text-center">
-                <p className="text-muted-foreground mb-4">Start a conversation</p>
-                <div className="flex flex-wrap justify-center gap-2">
-                  {[
-                    "What is quantum computing?",
-                    "Explain neural networks",
-                    "Best practices for React",
-                  ].map((q) => (
-                    <Button
-                      key={q}
-                      variant="secondary"
-                      className="text-xs rounded-full"
-                      onClick={() => handleSearchInput(q)}
-                    >
-                      {q}
-                    </Button>
-                  ))}
-                </div>
+                <p className="text-muted-foreground">Start a conversation</p>
               </div>
             ) : (
-              messages.map((message, idx) => (
-                <div
-                  key={message.id}
-                  className="animate-in slide-in-from-bottom-4 duration-500"
-                >
-                  {message.role === "user" ? (
-                    <div className="mb-6">
-                      <h2 className="text-2xl md:text-3xl font-serif border-b pb-4">
+              messages.map((message, idx) => {
+                const isLastMessage = idx === messages.length - 1
+                const messageSources = message.role === "assistant"
+                  ? getSourcesForMessage(message.id, isLastMessage)
+                  : []
+
+                return (
+                  <div key={message.id} className="mb-8">
+                    {message.role === "user" ? (
+                      <h1 className="text-[2rem] font-medium tracking-tight leading-tight mb-8">
                         {getMessageContent(message)}
-                      </h2>
-                    </div>
-                  ) : (
-                    <div className="space-y-6">
-                      <section>
-                        <h3 className="text-sm font-semibold mb-3 flex items-center gap-2">
-                          <span className="text-lg">✤</span> Answer
-                        </h3>
-                          {(() => {
-                            const isLastMessage = idx === messages.length - 1
-                            const messageSources = getSourcesForMessage(message.id, isLastMessage)
-                            return (
-                              <AnswerSection
-                                content={getMessageContent(message)}
-                                isLoading={isLoading && isLastMessage}
-                                skipAnimation={historyMessageIds.has(message.id)}
-                                onToggleSources={
-                                  messageSources.length > 0
-                                    ? () => {
-                                        if (selectedMessageId === message.id) {
-                                          setIsRightSidebarOpen(prev => !prev)
-                                        } else {
-                                          setSelectedMessageId(message.id)
-                                          setIsRightSidebarOpen(true)
-                                        }
-                                      }
-                                    : undefined
-                                }
-                                sourceCount={messageSources.length}
-                              />
-                            )
-                          })()}
-                      </section>
-                    </div>
-                  )}
-                </div>
-              ))
+                      </h1>
+                    ) : (
+                      <div className="space-y-8 animate-[fade-up_0.6s_ease-out]">
+                        {/* Sources Section */}
+                        {messageSources.length > 0 && (
+                          <section>
+                            <h3 className="flex items-center gap-2 text-lg font-medium mb-4">
+                              <BookOpen className="h-[18px] w-[18px]" />
+                              Sources
+                            </h3>
+                            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                              {messageSources.slice(0, 3).map((source) => (
+                                <SourceCard key={source.index} source={source} />
+                              ))}
+                            </div>
+                            {messageSources.length > 3 && (
+                              <button
+                                onClick={() => {
+                                  setSelectedMessageId(message.id)
+                                  setIsRightSidebarOpen(true)
+                                }}
+                                className="mt-3 text-sm text-muted-foreground hover:text-foreground transition-colors"
+                              >
+                                +{messageSources.length - 3} more sources
+                              </button>
+                            )}
+                          </section>
+                        )}
+
+                        {/* Answer Section */}
+                        <section>
+                          <h3 className="flex items-center gap-2 text-lg font-medium mb-4">
+                            <AlignLeft className="h-[18px] w-[18px]" />
+                            Answer
+                          </h3>
+                          <AnswerSection
+                            content={getMessageContent(message)}
+                            isLoading={isLoading && isLastMessage}
+                            skipAnimation={historyMessageIds.has(message.id)}
+                            onToggleSources={
+                              messageSources.length > 0
+                                ? () => {
+                                    setSelectedMessageId(message.id)
+                                    setIsRightSidebarOpen(true)
+                                  }
+                                : undefined
+                            }
+                            sourceCount={messageSources.length}
+                          />
+                        </section>
+                      </div>
+                    )}
+                  </div>
+                )
+              })
             )}
 
             {isLoading && messages[messages.length - 1]?.role === "user" && (
-              <div className="animate-in slide-in-from-bottom-4 duration-500">
+              <div className="space-y-8 animate-[fade-up_0.6s_ease-out]">
+                {currentSources.length > 0 && (
+                  <section>
+                    <h3 className="flex items-center gap-2 text-lg font-medium mb-4">
+                      <BookOpen className="h-[18px] w-[18px]" />
+                      Sources
+                    </h3>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                      {currentSources.slice(0, 3).map((source) => (
+                        <SourceCard key={source.index} source={source} />
+                      ))}
+                    </div>
+                  </section>
+                )}
                 <section>
-                  <h3 className="text-sm font-semibold mb-3 flex items-center gap-2">
-                    <span className="text-lg">✤</span> Answer
+                  <h3 className="flex items-center gap-2 text-lg font-medium mb-4">
+                    <AlignLeft className="h-[18px] w-[18px]" />
+                    Answer
                   </h3>
                   <AnswerSection content="" isLoading={true} />
                 </section>
@@ -279,26 +279,26 @@ export default function ChatPage() {
             )}
 
             {error && (
-              <div className="text-red-500 text-center p-4 bg-red-50 dark:bg-red-900/20 rounded-lg">
+              <div className="text-destructive text-center p-4 bg-destructive/10 rounded-lg">
                 Error: {error.message}
               </div>
             )}
 
             <div ref={messagesEndRef} />
-            <div className="h-40 w-full" aria-hidden="true" />
           </div>
         </div>
 
-        <div className="absolute bottom-4 left-0 right-0 p-4 flex justify-center z-10 pointer-events-none">
-          <div className="w-full max-w-2xl pointer-events-auto">
-            <form onSubmit={handleFormSubmit} className="relative">
+        {/* Bottom Search */}
+        <div className="absolute bottom-0 left-0 right-0 p-6 bg-gradient-to-t from-background via-background to-transparent pointer-events-none">
+          <div className="max-w-[760px] mx-auto pointer-events-auto">
+            <form onSubmit={handleFormSubmit}>
               <SearchInput
                 value={input}
                 onChange={(e) => setInput(e.target.value)}
                 onSearch={handleSearchInput}
                 onStop={stop}
-                placeholder="Ask a follow up..."
-                className="shadow-2xl border-white/5 bg-[#0a0a0a]"
+                placeholder="Ask a follow-up..."
+                variant="compact"
                 isLoading={isLoading}
               />
             </form>

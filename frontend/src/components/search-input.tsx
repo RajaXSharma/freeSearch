@@ -1,9 +1,7 @@
 "use client"
 
 import * as React from "react"
-import { ArrowRight, Globe, Square } from "lucide-react"
-import { Input } from "@/components/ui/input"
-import { Button } from "@/components/ui/button"
+import { ArrowRight, Square } from "lucide-react"
 import { cn } from "@/lib/utils"
 
 interface SearchInputProps extends Omit<React.InputHTMLAttributes<HTMLInputElement>, 'onChange'> {
@@ -12,6 +10,7 @@ interface SearchInputProps extends Omit<React.InputHTMLAttributes<HTMLInputEleme
   isLoading?: boolean
   value?: string
   onChange?: (e: React.ChangeEvent<HTMLInputElement>) => void
+  variant?: "default" | "compact"
 }
 
 export function SearchInput({
@@ -21,11 +20,14 @@ export function SearchInput({
   className,
   value: controlledValue,
   onChange: controlledOnChange,
+  variant = "default",
+  placeholder,
   ...props
 }: SearchInputProps) {
   const [internalQuery, setInternalQuery] = React.useState("")
   const isControlled = controlledValue !== undefined
   const query = isControlled ? controlledValue : internalQuery
+  const hasValue = query.trim().length > 0
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (controlledOnChange) {
@@ -46,6 +48,10 @@ export function SearchInput({
   }
 
   const handleButtonClick = () => {
+    if (isLoading && onStop) {
+      onStop()
+      return
+    }
     if (query.trim()) {
       onSearch(query)
       if (!isControlled) {
@@ -54,56 +60,52 @@ export function SearchInput({
     }
   }
 
-  const Icon = isLoading ? (
-    <div className="h-5 w-5 animate-spin rounded-full border-2 border-primary border-t-transparent" />
-  ) : (
-    <Globe className="h-5 w-5 text-teal-400 animate-spin-slow" />
-  )
+  const isCompact = variant === "compact"
 
   return (
-    <div className="relative w-full max-w-2xl px-4 md:px-0">
-      <div className="relative flex items-center group">
-        <div className="absolute left-4 flex items-center justify-center">
-            {Icon}
-        </div>
-        <Input
+    <div className={cn("relative w-full", isCompact ? "max-w-[760px]" : "max-w-2xl", className)}>
+      <div
+        className={cn(
+          "flex items-center rounded-full border border-border bg-background transition-all duration-150",
+          isCompact
+            ? "px-4 py-1 bg-muted"
+            : "px-6 py-1.5 shadow-[0_2px_6px_rgba(0,0,0,0.02)]",
+          "focus-within:border-muted-foreground focus-within:shadow-[0_4px_12px_rgba(0,0,0,0.05)]"
+        )}
+      >
+        <input
+          type="text"
           value={query}
           onChange={handleChange}
           onKeyDown={handleKeyDown}
-          // Generating text effect (shimmer) could be applied here if we had a separate element, 
-          // but for Input placeholder is standard. 
-          placeholder={isLoading ? "Generating..." : "Search anything..."}
+          placeholder={placeholder || (isLoading ? "Generating..." : "Ask anything...")}
           className={cn(
-            "h-14 w-full rounded-full border-white/10 bg-[#0a0a0a] pl-12 pr-14 text-lg shadow-lg transition-all focus-visible:ring-1 focus-visible:ring-teal-400/50",
-            className
+            "flex-1 bg-transparent border-none outline-none font-[inherit]",
+            isCompact ? "text-base py-2" : "text-lg py-3",
+            "placeholder:text-muted-foreground"
           )}
           {...props}
         />
-        <div className="absolute right-2 top-2">
-          {isLoading && onStop ? (
-            <Button
-              size="icon"
-              className="h-10 w-10 rounded-full bg-red-500/90 hover:bg-red-500 text-white transition-all"
-              onClick={onStop}
-              type="button"
-            >
-              <Square className="h-4 w-4 fill-current" />
-            </Button>
-          ) : (
-            <Button
-              size="icon"
-              className={cn(
-                "h-10 w-10 rounded-full transition-all",
-                query.trim() ? "bg-teal-400 hover:bg-teal-500 text-black" : "bg-zinc-800 text-zinc-500"
-              )}
-              disabled={!query.trim() || isLoading}
-              onClick={handleButtonClick}
-              type="button"
-            >
-              <ArrowRight className="h-4 w-4" />
-            </Button>
+        <button
+          type="button"
+          onClick={handleButtonClick}
+          disabled={!hasValue && !isLoading}
+          className={cn(
+            "flex items-center justify-center rounded-full transition-all duration-150 ml-2",
+            isCompact ? "w-8 h-8" : "w-10 h-10",
+            isLoading
+              ? "bg-destructive text-destructive-foreground"
+              : hasValue
+                ? "bg-primary text-primary-foreground"
+                : "bg-muted text-muted-foreground"
           )}
-        </div>
+        >
+          {isLoading ? (
+            <Square className={cn(isCompact ? "h-3 w-3" : "h-4 w-4", "fill-current")} />
+          ) : (
+            <ArrowRight className={isCompact ? "h-3 w-3" : "h-4 w-4"} />
+          )}
+        </button>
       </div>
     </div>
   )

@@ -25,40 +25,35 @@ export function SourceCard({ source }: SourceCardProps) {
   const hasValidUrl = source.url && domain
 
   const content = (
-    <div className="flex h-full flex-col gap-2 rounded-lg border bg-card p-3 transition-colors hover:bg-secondary/50">
-      <div className="text-sm font-medium line-clamp-2 leading-tight">
-        {source.title || "Untitled"}
-      </div>
-
-      {source.snippet && (
-        <p className="text-xs text-muted-foreground line-clamp-2 flex-1">
-          {source.snippet}
-        </p>
-      )}
-
-      <div className="flex items-center gap-2 mt-auto pt-1">
-        <div className="flex h-5 w-5 items-center justify-center rounded-full bg-primary/10 text-[10px] font-medium text-primary">
-          {source.index}
-        </div>
+    <div className="flex flex-col gap-2 p-4 rounded-xl border border-border bg-background transition-all duration-150 hover:bg-[var(--color-surface)] hover:border-[var(--color-surface-hover)] cursor-pointer">
+      {/* Domain header */}
+      <div className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
         {hasValidUrl ? (
           <>
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img
               src={faviconUrl}
               alt=""
-              className="h-3 w-3"
+              className="h-4 w-4 rounded-sm bg-muted"
               onError={(e) => {
                 e.currentTarget.style.display = 'none'
               }}
             />
-            <span className="truncate text-xs text-muted-foreground">{domain}</span>
+            <span>{domain}</span>
           </>
         ) : (
           <>
-            <Globe className="h-3 w-3 text-muted-foreground" />
-            <span className="text-xs text-muted-foreground">No link</span>
+            <div className="h-4 w-4 rounded-sm bg-muted flex items-center justify-center">
+              <Globe className="h-2.5 w-2.5" />
+            </div>
+            <span>No link</span>
           </>
         )}
+      </div>
+
+      {/* Title */}
+      <div className="text-sm font-medium text-foreground line-clamp-2 leading-snug">
+        {source.title || "Untitled"}
       </div>
     </div>
   )

@@ -5,18 +5,17 @@
 @custom-variant dark (&:is(.dark *));
 
 @theme {
-  --font-sans: var(--font-geist-sans);
+  --font-sans: "Inter", system-ui, -apple-system, sans-serif;
   --font-mono: var(--font-geist-mono);
-  --font-serif: var(--font-noto-serif);
 
-  --animate-spin-slow: spin 3s linear infinite;
-  --animate-float-up: float-up 0.5s ease-out forwards;
-  --animate-shimmer: shimmer 2s linear infinite;
+  --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+  --animate-fade-up: fade-up 0.6s var(--ease-out) forwards;
+  --animate-blink: blink 1s step-start infinite;
 
-  @keyframes float-up {
+  @keyframes fade-up {
     from {
       opacity: 0;
-      transform: translateY(10px);
+      transform: translateY(20px);
     }
     to {
       opacity: 1;
@@ -24,81 +23,95 @@
     }
   }
 
-  @keyframes shimmer {
-    from {
-      background-position: 0 0;
-    }
-    to {
-      background-position: -200% 0;
+  @keyframes blink {
+    50% {
+      opacity: 0;
     }
   }
 }
 
 :root {
-  --background: 0 0% 4%; /* #0a0a0a */
-  --foreground: 0 0% 98%;
+  /* OKLCH Color System - Light Mode (Warm Cream, Hue 85) */
+  --chroma: 0.5;
+  --hue: 85;
 
-  --card: 0 0% 6%; /* slightly lighter than bg */
-  --card-foreground: 0 0% 98%;
+  --color-bg: oklch(98% calc(0.01 * var(--chroma)) var(--hue));
+  --color-sidebar: oklch(96% calc(0.015 * var(--chroma)) var(--hue));
+  --color-surface: oklch(94% calc(0.015 * var(--chroma)) var(--hue));
+  --color-surface-hover: oklch(92% calc(0.02 * var(--chroma)) var(--hue));
+  --color-border: oklch(88% calc(0.02 * var(--chroma)) var(--hue));
 
-  --popover: 0 0% 4%;
-  --popover-foreground: 0 0% 98%;
+  --color-primary: oklch(20% calc(0.01 * var(--chroma)) var(--hue));
+  --color-text: oklch(25% calc(0.01 * var(--chroma)) var(--hue));
+  --color-text-muted: oklch(55% calc(0.01 * var(--chroma)) var(--hue));
 
-  --primary: 173 80% 40%; /* Teal-400 equivalent approx */
-  --primary-foreground: 0 0% 9%;
+  --color-nav-active-bg: oklch(92% calc(0.02 * var(--chroma)) var(--hue));
+  --color-citation-bg: oklch(92% calc(0.02 * var(--chroma)) var(--hue));
+  --color-citation-text: oklch(40% calc(0.04 * var(--chroma)) var(--hue));
 
-  --secondary: 0 0% 9%; /* Dark grey */
-  --secondary-foreground: 0 0% 98%;
+  /* Semantic mappings for shadcn compatibility */
+  --background: var(--color-bg);
+  --foreground: var(--color-text);
+  --card: var(--color-bg);
+  --card-foreground: var(--color-text);
+  --popover: var(--color-bg);
+  --popover-foreground: var(--color-text);
+  --primary: var(--color-primary);
+  --primary-foreground: var(--color-bg);
+  --secondary: var(--color-surface);
+  --secondary-foreground: var(--color-text);
+  --muted: var(--color-surface);
+  --muted-foreground: var(--color-text-muted);
+  --accent: var(--color-surface-hover);
+  --accent-foreground: var(--color-text);
+  --destructive: oklch(55% 0.2 25);
+  --destructive-foreground: oklch(98% 0.01 25);
+  --border: var(--color-border);
+  --input: var(--color-border);
+  --ring: var(--color-primary);
 
-  --muted: 0 0% 9%;
-  --muted-foreground: 0 0% 63.9%;
-
-  --accent: 173 80% 40%;
-  --accent-foreground: 0 0% 9%;
-
-  --destructive: 0 62.8% 30.6%;
-  --destructive-foreground: 0 0% 98%;
-
-  --border: 0 0% 14.9%; /* white/10 approx */
-  --input: 0 0% 14.9%;
-  --ring: 173 80% 40%;
-
-  --chart-1: 220 70% 50%;
-  --chart-2: 160 60% 45%;
-  --chart-3: 30 80% 55%;
-  --chart-4: 280 65% 60%;
-  --chart-5: 340 75% 55%;
-
-  --radius: 0.5rem;
+  --radius: 0.75rem;
 }
 
+.dark {
+  /* OKLCH Color System - Dark Mode (Navy Slate, Hue 260) */
+  --hue: 260;
 
+  --color-bg: oklch(18% calc(0.015 * var(--chroma)) var(--hue));
+  --color-sidebar: oklch(20% calc(0.015 * var(--chroma)) var(--hue));
+  --color-surface: oklch(22% calc(0.02 * var(--chroma)) var(--hue));
+  --color-surface-hover: oklch(26% calc(0.02 * var(--chroma)) var(--hue));
+  --color-border: oklch(30% calc(0.02 * var(--chroma)) var(--hue));
+
+  --color-primary: oklch(90% calc(0.01 * var(--chroma)) var(--hue));
+  --color-text: oklch(85% calc(0.01 * var(--chroma)) var(--hue));
+  --color-text-muted: oklch(65% calc(0.01 * var(--chroma)) var(--hue));
+
+  --color-nav-active-bg: oklch(28% calc(0.02 * var(--chroma)) var(--hue));
+  --color-citation-bg: oklch(28% calc(0.02 * var(--chroma)) var(--hue));
+  --color-citation-text: oklch(85% calc(0.02 * var(--chroma)) var(--hue));
+}
 
 @theme inline {
-  --color-background: hsl(var(--background));
-  --color-foreground: hsl(var(--foreground));
-  --color-card: hsl(var(--card));
-  --color-card-foreground: hsl(var(--card-foreground));
-  --color-popover: hsl(var(--popover));
-  --color-popover-foreground: hsl(var(--popover-foreground));
-  --color-primary: hsl(var(--primary));
-  --color-primary-foreground: hsl(var(--primary-foreground));
-  --color-secondary: hsl(var(--secondary));
-  --color-secondary-foreground: hsl(var(--secondary-foreground));
-  --color-muted: hsl(var(--muted));
-  --color-muted-foreground: hsl(var(--muted-foreground));
-  --color-accent: hsl(var(--accent));
-  --color-accent-foreground: hsl(var(--accent-foreground));
-  --color-destructive: hsl(var(--destructive));
-  --color-destructive-foreground: hsl(var(--destructive-foreground));
-  --color-border: hsl(var(--border));
-  --color-input: hsl(var(--input));
-  --color-ring: hsl(var(--ring));
-  --color-chart-1: hsl(var(--chart-1));
-  --color-chart-2: hsl(var(--chart-2));
-  --color-chart-3: hsl(var(--chart-3));
-  --color-chart-4: hsl(var(--chart-4));
-  --color-chart-5: hsl(var(--chart-5));
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
   --radius-lg: var(--radius);
   --radius-md: calc(var(--radius) - 2px);
   --radius-sm: calc(var(--radius) - 4px);
@@ -110,7 +123,7 @@
   ::before,
   ::backdrop,
   ::file-selector-button {
-    border-color: var(--color-gray-200, currentColor);
+    border-color: var(--color-border);
   }
 }
 
@@ -124,24 +137,24 @@
   }
   body {
     @apply bg-background text-foreground;
+    font-family: var(--font-sans);
   }
 }
 
-/* Custom prose styles for better readability like Perplexity */
+/* Prose styles for answer content */
 .prose {
-  --tw-prose-body: hsl(var(--foreground));
-  --tw-prose-headings: hsl(var(--foreground));
-  --tw-prose-bold: hsl(var(--foreground));
-  --tw-prose-links: hsl(var(--primary));
+  --tw-prose-body: var(--color-text);
+  --tw-prose-headings: var(--color-text);
+  --tw-prose-bold: var(--color-text);
+  --tw-prose-links: var(--color-primary);
 
   font-size: 1rem;
-  line-height: 1.8;
-  letter-spacing: 0.01em;
+  line-height: 1.7;
 }
 
 .prose p {
-  margin-top: 1.25em;
-  margin-bottom: 1.25em;
+  margin-top: 1.2em;
+  margin-bottom: 1.2em;
 }
 
 .prose p:first-child {
@@ -152,25 +165,11 @@
   margin-bottom: 0;
 }
 
-/* Style bold text as section headers */
 .prose strong {
   font-weight: 600;
-  color: hsl(var(--foreground));
+  color: var(--color-text);
 }
 
-/* When bold text starts a paragraph or is followed by colon, style as header */
-.prose p > strong:first-child {
-  display: block;
-  margin-top: 1.5em;
-  margin-bottom: 0.5em;
-  font-size: 1.05em;
-}
-
-.prose p:first-child > strong:first-child {
-  margin-top: 0;
-}
-
-/* Better list styling */
 .prose ul,
 .prose ol {
   margin-top: 1em;
@@ -183,46 +182,28 @@
   margin-bottom: 0.5em;
 }
 
-.prose li > p {
-  margin-top: 0.5em;
-  margin-bottom: 0.5em;
-}
-
-/* Inline code styling */
 .prose code:not(pre code) {
-  background-color: hsl(var(--muted));
+  background-color: var(--color-surface);
   padding: 0.2em 0.4em;
   border-radius: 0.25rem;
   font-size: 0.9em;
   font-weight: 500;
 }
 
-/* Blockquote styling */
 .prose blockquote {
-  border-left: 3px solid hsl(var(--primary));
+  border-left: 2px solid var(--color-border);
   padding-left: 1em;
   margin-top: 1.5em;
   margin-bottom: 1.5em;
-  font-style: normal;
-  color: hsl(var(--muted-foreground));
+  color: var(--color-text-muted);
 }
 
-/* Citation references like [1], [2] */
-.prose a[href^="#"],
-.prose a:not([href]) {
-  color: hsl(var(--primary));
-  font-weight: 500;
-  text-decoration: none;
-}
-
-/* Horizontal rule */
 .prose hr {
   margin-top: 2em;
   margin-bottom: 2em;
-  border-color: hsl(var(--border));
+  border-color: var(--color-border);
 }
 
-/* Better heading styles if LLM outputs them */
 .prose h1,
 .prose h2,
 .prose h3,
@@ -238,4 +219,43 @@
 .prose h3:first-child,
 .prose h4:first-child {
   margin-top: 0;
+}
+
+/* Citation badge styling */
+.citation {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  border-radius: 9999px;
+  background-color: var(--color-citation-bg);
+  color: var(--color-citation-text);
+  font-size: 0.65rem;
+  font-weight: 600;
+  vertical-align: super;
+  margin: 0 3px;
+  text-decoration: none;
+  cursor: pointer;
+  transition: all 0.15s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.citation:hover {
+  background-color: var(--color-primary);
+  color: var(--color-bg);
+}
+
+/* Blinking cursor for streaming */
+.streaming-cursor {
+  display: inline-block;
+  width: 8px;
+  height: 1em;
+  background-color: var(--color-text);
+  vertical-align: text-bottom;
+  margin-left: 4px;
+  animation: blink 1s step-start infinite;
+}
+
+.streaming-cursor.hidden {
+  display: none;
 }

@@ -33,20 +33,21 @@ export default function Page() {
   }
 
   return (
-    <div className="flex h-screen w-full overflow-hidden bg-[#0a0a0a] text-foreground font-sans selection:bg-teal-500/30">
+    <div className="flex h-screen w-full overflow-hidden bg-background text-foreground">
       <Sidebar />
-      
-      <main className="flex-1 flex flex-col items-center justify-center p-4 animate-in fade-in duration-500">
-        <h1 className="text-4xl md:text-5xl font-normal mb-8 font-serif text-center tracking-tight text-balance text-white/90">
-          Where knowledge begins
-        </h1>
-        <SearchInput 
-          onSearch={handleSearch} 
-          autoFocus 
-          isLoading={isCreatingChat}
-          disabled={isCreatingChat}
-        />
-        
+
+      <main className="flex-1 flex flex-col items-center justify-center p-8">
+        <div className="flex flex-col items-center w-full max-w-[640px]">
+          <h1 className="text-[2rem] font-medium tracking-tight mb-6 text-center">
+            Where knowledge begins
+          </h1>
+          <SearchInput
+            onSearch={handleSearch}
+            autoFocus
+            isLoading={isCreatingChat}
+            disabled={isCreatingChat}
+          />
+        </div>
       </main>
     </div>
   )
